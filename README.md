@@ -1,9 +1,10 @@
 # JobSync Cloud
 
-Next.js 16 application with Neon Postgres persistence and Neon Managed Better Auth.
+Next.js 16 application with Neon Postgres, Neon Managed Better Auth, and private Neon Object Storage.
 The protected `/dashboard` establishes the server-side identity and application
-profile boundary. Workers, storage, AI, billing, and the final application shell
-are not implemented.
+profile boundary. `/dashboard/resume` provides direct presigned browser uploads
+and ownership-checked private downloads. Functions/triggers, AI, billing, and the
+final application shell are deferred.
 
 Use Node.js 22.12+ or 24 LTS and pnpm (the repository pins pnpm in `package.json`).
 
@@ -123,3 +124,95 @@ Existing shadcn components remain available. Add components using pnpm:
 ```bash
 pnpm dlx shadcn@latest add button
 ```
+
+## Private resume transport
+
+`neon.ts` uses the stable `@neon/config/v1` GA API and declares only existing Auth
+and the **private** `jobsync-files` bucket. It does not change compute sizing,
+branch protection/TTL, or declare Functions, triggers, AI Gateway, or Data API.
+Link the CLI to the explicitly verified isolated development project/branch first;
+a branch called `production` is not evidence of isolation. Review the plan and
+ensure the existing Managed Better Auth integration is preserved before deploying.
+
+```bash
+neon config plan
+neon deploy
+neon env pull
+pnpm storage:configure
+pnpm storage:smoke
+pnpm storage:test
+```
+
+Pull `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_ENDPOINT_URL_S3`, and
+`AWS_REGION` into ignored local environment files. Set server-only `APP_ORIGIN`
+to the exact application origin, e.g. `http://localhost:3000` (no trailing slash).
+Never expose storage credentials through `NEXT_PUBLIC_` variables. The bucket
+must remain explicitly private. The server-only AWS SDK client uses path-style
+access and `requestChecksumCalculation: "WHEN_REQUIRED"` for Neon presigned PUT
+compatibility. CORS is applied idempotently through S3, allowing only APP_ORIGIN,
+PUT/GET/HEAD, `content-type` and `if-none-match` request headers, and exposing ETag.
+No wildcard origins or headers are allowed.
+
+`ResumeUpload` is a transport record, separate from `ResumeVersion`, with
+`pending → uploaded | rejected | expired` states. Each intent creates its row
+before signing, and creates a Resume in the same transaction when needed.
+Ownership-qualified resume foreign keys prevent cross-tenant references. SQL
+checks enforce positive declared sizes up to 5 MiB, expiry after creation, allowed
+MIME types, and consistent uploaded metadata. Actual size uses BIGINT so even
+malicious objects beyond the Postgres integer range can be durably rejected.
+Pending records represent abandoned uploads durably; completion expires stale
+ones. Scheduled cleanup is deferred.
+A signing failure leaves the pending row until expiry; a retry creates a fresh ID.
+
+The server generates immutable keys:
+`users/{userId}/resumes/{resumeId}/uploads/{uploadId}/original.pdf` (or `.docx`).
+Filenames never influence paths. PDF/DOCX extension and exact MIME must agree,
+with sizes greater than zero and at most 5 MiB. PUT capabilities last at most
+300 seconds, bounded by the pending record expiry. Both Content-Type and
+`If-None-Match: *` are signed; create-only PUT prevents replay from overwriting
+accepted bytes. This conditional behavior was verified against the isolated Neon
+branch (first PUT 200, replay 412, missing/changed signed header 403); Neon’s public
+compatibility table does not currently promise conditional writes, so re-run the
+live proof before changing storage providers or relying on new branch behavior.
+Do not remove the conditional header or fall back to overwrite-capable PUTs.
+
+POST `/api/resume-uploads` derives the owner from the verified session; request
+owner IDs and keys are rejected. POST `/api/resume-uploads/{uploadId}/complete`
+checks owner plus ID, HEADs the recorded object, and checks size/type against the
+declaration before a conditional pending-state update. Concurrent completions
+converge on the winning record. Missing objects remain pending (409); invalid
+objects remain rejected even if best-effort deletion fails. POST
+`/api/resume-uploads/{uploadId}/download-url` requires the owner and uploaded state,
+returns a fresh 60-second GET capability with `Cache-Control: no-store`, and never
+persists it. Foreign and missing IDs return equivalent 404 responses. Browser
+capability requests also reject an Origin that differs from APP_ORIGIN.
+
+**Uploaded is transport acceptance only.** Content-Type is browser-controlled;
+this slice does not prove PDF/DOCX byte validity, ZIP safety, or semantic resume
+acceptance. No ResumeVersion, ProcessingRun, extraction, or AI work is created.
+The framework-independent reconciliation service has an internal stored-object-key
+entry that resolves metadata/ownership from Postgres for the next trusted trigger
+slice. Event paths alone never establish ownership.
+
+`storage:smoke` is read-only and writes no objects. `storage:test` uses mocked
+storage plus isolated Postgres constraint/concurrency tests; DB fixtures roll back
+or are removed in finally. The optional live proof needs a running app and an
+explicit branch gate:
+
+```bash
+JOBSYNC_STORAGE_LIVE_BRANCH=lively-shape-65452824/br-tiny-tree-b44fo1lv \
+  node --conditions=react-server --import tsx scripts/storage-live-proof.ts
+```
+
+It verifies the known branch endpoints, aborts if resumes exist, uses temporary
+auth identities and an inline tiny PDF, exercises two-user isolation, signed
+PUT/GET, replay protection, CORS preflight, and anonymous denial, then deletes only
+its tagged test objects/rows/users. It logs no credentials or signed URLs. Actual
+browser CORS was separately verified through the `/dashboard/resume` picker flow.
+Neon stores lifecycle/versioning configuration without enforcing it; do not rely
+on bucket lifecycle or versioning for cleanup or immutability. Branch storage
+uses copy-on-write snapshots, so parent data still needs sanitization.
+
+Current official references: [Neon config](https://neon.com/docs/reference/neon-ts),
+[Object Storage setup](https://neon.com/docs/storage/get-started),
+[S3 compatibility](https://neon.com/docs/storage/s3-compatibility).

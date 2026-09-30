@@ -83,6 +83,11 @@ void identityTypeContract
 test("server configuration fails by variable name without leaking inputs", () => {
   const base = {
     ...process.env,
+    AWS_ACCESS_KEY_ID: "test-access",
+    AWS_SECRET_ACCESS_KEY: "test-secret",
+    AWS_ENDPOINT_URL_S3: "https://storage.example.com",
+    AWS_REGION: "us-east-2",
+    APP_ORIGIN: "http://localhost:3000",
     DATABASE_URL: "postgresql://user:private-password@example.com/test",
     DATABASE_URL_UNPOOLED: "",
     NEON_AUTH_BASE_URL: "https://auth.example.com/auth",
@@ -90,6 +95,11 @@ test("server configuration fails by variable name without leaking inputs", () =>
   }
   for (const key of [
     "DATABASE_URL",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_ENDPOINT_URL_S3",
+    "AWS_REGION",
+    "APP_ORIGIN",
     "NEON_AUTH_BASE_URL",
     "NEON_AUTH_COOKIE_SECRET",
   ]) {

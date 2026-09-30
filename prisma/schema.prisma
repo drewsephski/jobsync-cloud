@@ -7,6 +7,13 @@ datasource db {
   provider = "postgresql"
 }
 
+enum ResumeUploadStatus {
+  pending
+  uploaded
+  rejected
+  expired
+}
+
 enum ResumeVersionSource {
   manual
   upload
@@ -52,6 +59,7 @@ model UserProfile {
 
   resumes           Resume[]
   resumeVersions    ResumeVersion[]
+  resumeUploads     ResumeUpload[]
   targetPreferences TargetPreference[]
   processingRuns    ProcessingRun[]
   usageReservations AiUsageReservation[]
@@ -67,6 +75,7 @@ model Resume {
 
   owner    UserProfile     @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   versions ResumeVersion[]
+  uploads  ResumeUpload[]
 
   // Used by the ownership-qualified version foreign key.
   @@unique([ownerUserId, id])
@@ -200,4 +209,30 @@ model AiUsage {
   @@index([ownerUserId, createdAt])
   @@index([ownerUserId, reservationId])
   @@index([provider, providerRequestId])
+}
+
+// Transport acceptance only. Byte validation and semantic versions are deferred.
+model ResumeUpload {
+  id                  String             @id @default(uuid()) @db.Uuid
+  ownerUserId         String
+  resumeId            String             @db.Uuid
+  objectKey           String             @unique
+  originalFileName    String             @db.VarChar(255)
+  declaredContentType String
+  declaredSizeBytes   Int
+  actualContentType   String?
+  actualSizeBytes     BigInt?
+  etag                String?
+  status              ResumeUploadStatus @default(pending)
+  expiresAt           DateTime           @db.Timestamptz(3)
+  uploadedAt          DateTime?          @db.Timestamptz(3)
+  rejectionCode       String?
+  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+
+  owner  UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  resume Resume      @relation(fields: [ownerUserId, resumeId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([ownerUserId, status, createdAt])
+  @@index([status, expiresAt])
 }

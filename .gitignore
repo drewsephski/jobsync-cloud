@@ -43,3 +43,7 @@ next-env.d.ts
 
 # Regenerated Prisma client
 /lib/generated/prisma/
+
+# Local Neon branch context/credentials
+.neon
+.neon/
