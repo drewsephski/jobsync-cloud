@@ -37,3 +37,9 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Public variable names only
+!.env.example
+
+# Regenerated Prisma client
+/lib/generated/prisma/

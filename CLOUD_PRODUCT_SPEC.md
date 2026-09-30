@@ -24,7 +24,7 @@ V1 excludes teams, recruiter CRM, autonomous applications/outreach, user-supplie
 - Keep `Gsync/jobsync` as an upstream remote for selective fixes. Do not commit to permanent merge compatibility or add cloud conditionals throughout the self-hosted app.
 - The current workspace is `drewsephski/jobsync`, with an upstream remote and substantial staged UI/test work. Preserve it. Inventory those changes and selectively carry agreed improvements into the new product; do not reset, overwrite, or silently copy the current tree as the cloud baseline.
 - This document is preparation in the current workspace. It does not create a GitHub repository, contact the maintainer, deploy services, or alter the upstream PR branch.
-- Keep npm and `package-lock.json` initially, following this repository's tooling. Retain Next.js, TypeScript, Prisma, Zod, Tailwind 4, and shadcn/ui.
+- Standardize the cloud repository on pnpm and `pnpm-lock.yaml`. Retain Next.js, TypeScript, Prisma, Zod, Tailwind 4, and shadcn/ui.
 
 ## 3. Architecture
 
@@ -246,7 +246,7 @@ During shell/golden-path QA, log defects with route, viewport, steps, expected/a
 5. **Cloud discovery.** Expand shared board ingestion, freshness, versioned matching, scheduled claims, fairness, and progress. Acceptance: users tracking the same board share ingestion, retain private matches, and recover after worker eviction.
 6. **Selective domain ports and launch.** Port interviews, cover letters, contacts/tasks/activity, MCP, and backup import as justified. Export/deletion and tenant verification are launch essentials, not optional late features. Repeat two-account checks as each domain becomes available.
 
-For each milestone run npm lint, TypeScript checking, and relevant unit/integration tests, followed by deployed proof for the changed provider lifecycle. Explicitly distinguish local checks, browser checks, deployment, and live provider proof. Test ownership throughout, not only at the end.
+For each milestone run `pnpm lint`, TypeScript checking, and relevant unit/integration tests, followed by deployed proof for the changed provider lifecycle. Explicitly distinguish local checks, browser checks, deployment, and live provider proof. Test ownership throughout, not only at the end.
 
 Required production proof includes real signup/recovery, authorized private upload/download, trigger invocation, expired-lease recovery and stale-worker rejection, AI reservation races/reconciliation, shared ingestion/private matching, billing event replay, account export/deletion, and monitoring without sensitive content.
 

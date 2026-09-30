@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ResumeVersionSource {
+  manual
+  upload
+  import
+}
+
+enum ResumeVersionStatus {
+  draft
+  ready
+  rejected
+}
+
+enum ProcessingRunStatus {
+  pending
+  running
+  retry_wait
+  succeeded
+  failed
+  canceled
+}
+
+enum AiUsageReservationStatus {
+  reserved
+  settled
+  released
+  reconciliation_required
+}
+
+enum AiUsageStatus {
+  succeeded
+  failed
+  reconciliation_required
+}
+
+// Application-owned identity only; no dependency on Neon's managed auth schema.
+model UserProfile {
+  id                    String    @id
+  displayName           String?
+  timezone              String?
+  onboardingCompletedAt DateTime? @db.Timestamptz(3)
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+
+  resumes           Resume[]
+  resumeVersions    ResumeVersion[]
+  targetPreferences TargetPreference[]
+  processingRuns    ProcessingRun[]
+  usageReservations AiUsageReservation[]
+  aiUsage           AiUsage[]
+}
+
+model Resume {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerUserId String
+  title       String
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  owner    UserProfile     @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  versions ResumeVersion[]
+
+  // Used by the ownership-qualified version foreign key.
+  @@unique([ownerUserId, id])
+  @@index([ownerUserId, createdAt])
+}
+
+// Content is a snapshot: subsequent edits create a new version. Status can change.
+model ResumeVersion {
+  id               String              @id @default(uuid()) @db.Uuid
+  ownerUserId      String
+  resumeId         String              @db.Uuid
+  version          Int
+  source           ResumeVersionSource
+  status           ResumeVersionStatus @default(draft)
+  data             Json                @db.JsonB
+  extractedText    String?
+  storageObjectKey String?             @unique
+  createdAt        DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime            @updatedAt @db.Timestamptz(3)
+
+  owner  UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  resume Resume      @relation(fields: [ownerUserId, resumeId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([resumeId, version])
+  @@index([ownerUserId, resumeId])
+}
+
+model TargetPreference {
+  id                     String   @id @default(uuid()) @db.Uuid
+  ownerUserId            String
+  targetTitle            String
+  location               String?
+  remotePreferred        Boolean?
+  minimumCompensationUsd BigInt?
+  keywords               String[] @default([])
+  active                 Boolean  @default(true)
+  createdAt              DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt              DateTime @updatedAt @db.Timestamptz(3)
+
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@index([ownerUserId, active])
+}
+
+model ProcessingRun {
+  id                      String              @id @default(uuid()) @db.Uuid
+  ownerUserId             String?
+  // Open strings until the supported product operations are established.
+  kind                    String
+  resourceId              String
+  // Globally unique, including service-owned runs. Callers must namespace keys.
+  idempotencyKey          String              @unique
+  status                  ProcessingRunStatus @default(pending)
+  attempt                 Int                 @default(0)
+  availableAt             DateTime            @default(now()) @db.Timestamptz(3)
+  // A fresh token per claim; future workers must qualify all writes by this token.
+  leaseToken              String?             @db.Uuid
+  leaseExpiresAt          DateTime?           @db.Timestamptz(3)
+  checkpoint              Json?               @db.JsonB
+  cancellationRequestedAt DateTime?           @db.Timestamptz(3)
+  startedAt               DateTime?           @db.Timestamptz(3)
+  completedAt             DateTime?           @db.Timestamptz(3)
+  errorCode               String?
+  createdAt               DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
+
+  owner UserProfile? @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+
+  @@index([status, availableAt, id])
+  @@index([status, leaseExpiresAt, id])
+  @@index([ownerUserId, status, createdAt])
+  @@index([ownerUserId, kind, resourceId])
+  @@index([kind, resourceId])
+}
+
+model AiUsageReservation {
+  id                   String                   @id @default(uuid()) @db.Uuid
+  ownerUserId          String
+  feature              String
+  provider             String?
+  model                String?
+  idempotencyKey       String                   @unique
+  billingPeriodStart   DateTime?                @db.Timestamptz(3)
+  billingPeriodEnd     DateTime?                @db.Timestamptz(3)
+  // Internal integer units, with no promise of public credit weights.
+  reservedUnits        BigInt
+  reservedCostMicroUsd BigInt
+  // Null means not yet reconciled; zero means reconciled with zero usage/cost.
+  consumedUnits        BigInt?
+  finalCostMicroUsd    BigInt?
+  status               AiUsageReservationStatus @default(reserved)
+  expiresAt            DateTime                 @db.Timestamptz(3)
+  createdAt            DateTime                 @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime                 @updatedAt @db.Timestamptz(3)
+
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  usage AiUsage[]
+
+  @@unique([ownerUserId, id])
+  @@index([ownerUserId, createdAt])
+  @@index([ownerUserId, status, expiresAt])
+  @@index([status, expiresAt])
+}
+
+// One record per provider attempt (including retries); only reconciliation updates it.
+model AiUsage {
+  id                 String        @id @default(uuid()) @db.Uuid
+  ownerUserId        String
+  reservationId      String?       @db.Uuid
+  feature            String
+  provider           String
+  model              String
+  // Unique internal request ID per attempt; provider IDs are provider-scoped.
+  requestId          String        @unique
+  providerRequestId  String?
+  pricingVersion     String?
+  inputTokens        Int?
+  outputTokens       Int?
+  otherBillableUnits BigInt?
+  costMicroUsd       BigInt?
+  status             AiUsageStatus
+  errorCode          String?
+  // Operational metadata only, never prompts, resumes, or provider responses.
+  metadata           Json?         @db.JsonB
+  createdAt          DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime      @updatedAt @db.Timestamptz(3)
+
+  owner       UserProfile         @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  reservation AiUsageReservation? @relation(fields: [ownerUserId, reservationId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([ownerUserId, createdAt])
+  @@index([ownerUserId, reservationId])
+  @@index([provider, providerRequestId])
+}
