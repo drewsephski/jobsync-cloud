@@ -1,19 +1,45 @@
-import { Button } from "@/components/ui/button"
+import { auth } from '@/lib/auth/server';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from '@/components/ui/empty';
 
-export default function Page() {
+// Server components using auth methods must be rendered dynamically
+export const dynamic = 'force-dynamic';
+
+export default async function Home() {
+  const { data: session } = await auth.getSession();
+
+  if (session?.user) {
+    return (
+      <Empty>
+        <EmptyHeader>
+          <EmptyTitle>Logged in</EmptyTitle>
+          <EmptyDescription>Signed in as {session.user.name}</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
+    );
+  }
+
   return (
-    <div className="flex min-h-svh p-6">
-      <div className="flex max-w-md min-w-0 flex-col gap-4 text-sm leading-loose">
-        <div>
-          <h1 className="font-medium">Project ready!</h1>
-          <p>You may now add components and start building.</p>
-          <p>We&apos;ve already added the button component for you.</p>
-          <Button className="mt-2">Button</Button>
-        </div>
-        <div className="font-mono text-xs text-muted-foreground">
-          (Press <kbd>d</kbd> to toggle dark mode)
-        </div>
-      </div>
-    </div>
-  )
+    <Empty>
+      <EmptyHeader>
+        <EmptyTitle>Not logged in</EmptyTitle>
+        <EmptyDescription>Create an account or sign in to continue.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button nativeButton={false} render={<Link href="/auth/sign-up" />}>
+          Sign up
+        </Button>
+        <Button variant="neutral" nativeButton={false} render={<Link href="/auth/sign-in" />}>
+          Sign in
+        </Button>
+      </EmptyContent>
+    </Empty>
+  );
 }
