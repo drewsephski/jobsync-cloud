@@ -1,7 +1,8 @@
 # JobSync Cloud
 
-Next.js 16 application. This first implementation step provides only the Neon
-Postgres persistence foundation. Authentication, workers, storage, AI, and billing
+Next.js 16 application with Neon Postgres persistence and Neon Managed Better Auth.
+The protected `/dashboard` establishes the server-side identity and application
+profile boundary. Workers, storage, AI, billing, and the final application shell
 are not implemented.
 
 Use Node.js 22.12+ or 24 LTS and pnpm (the repository pins pnpm in `package.json`).
@@ -14,7 +15,11 @@ pnpm dev
 ## Database configuration
 
 Copy `.env.example` to `.env.local` and set `DATABASE_URL` to your isolated Neon
-development database's pooled connection string. Credentials stay in ignored local
+development database's pooled connection string. Also set `NEON_AUTH_BASE_URL`
+to that branch's managed auth endpoint (including `/auth`) and
+`NEON_AUTH_COOKIE_SECRET` to a random secret of at least 32 characters. Runtime
+configuration is validated once with variable-name-only errors. Credentials stay
+in ignored local
 environment files; never use a `NEXT_PUBLIC_` variable for database access.
 
 `DATABASE_URL_UNPOOLED` is optional and overrides the connection used by Prisma CLI.
@@ -49,7 +54,11 @@ outside the application schema and must remain managed by Neon.
 
 ## Persistence boundaries
 
-- `UserProfile.id` will be the managed-auth identity ID; no auth tables are modeled.
+- `UserProfile.id` is the managed-auth identity ID; no auth tables are modeled.
+  Protected pages provision the profile lazily from the verified server session
+  using a parameterized atomic Postgres `INSERT ... ON CONFLICT ... RETURNING`.
+  Existing app profile edits and timestamps are preserved. Concurrent first requests
+  return one row under the managed-auth ID; no auth webhooks or migrations are needed.
 - Resume/version and reservation/usage links use ownership-qualified foreign keys.
   Resume edits create new version snapshots; version content immutability and
   monotonic allocation beyond the unique positive version number must be enforced
@@ -74,6 +83,38 @@ outside the application schema and must remain managed by Neon.
 use the Node runtime. The smoke/test scripts enable Node's `react-server` condition
 so the same guarded server module can run outside Next.js. No public health route
 or browser database API is exposed.
+
+## Authentication foundation
+
+Neon Auth is the sole identity provider; its `neon_auth` schema is never modeled or
+modified by application migrations. Email/password signup and signin redirect to
+`/dashboard`; server-side signout uses the SDK and redirects to `/auth/sign-in`.
+`/`, `/auth/sign-in`, `/auth/sign-up`, and `/api/auth/*` remain public. Proxy guards
+`/dashboard`, `/onboarding`, and `/account` (the latter two are future routes).
+
+Use `getCurrentAuthUser()` from `lib/auth/context.ts` for nullable verified identity
+in future API handlers (return 401 on null), or `requireCurrentAuthUser()` for pages.
+`requireCurrentProfile()` also ensures the application profile. These functions
+accept no browser owner ID. Application components receive no session tokens; provider errors
+raise sanitized failures, never normal logout. Server lookups bypass the SDK's
+cookie session cache, with request-scoped React memoization. Every private operation
+must authorize independently of proxy/layout and use the authenticated ID in
+ownership-qualified queries. The branded `CurrentAuthUser` type helps prevent
+accidental unverified provisioning; it does not replace runtime authorization.
+
+The proxy also bypasses cookie-session caching so revoked sessions redirect before
+reaching read-only Server Components. The SDK is still only an early route guard.
+
+`pnpm auth:test` covers the session boundary, redirects/actions, input validation,
+and configuration errors without contacting Neon. `pnpm db:test` includes real
+Postgres profile provisioning and independent concurrent requests. Rollback tests
+leave no writes; concurrency tests delete their unique test profile in `finally`.
+Use an isolated development database for these checks.
+
+This is an early auth foundation, **not production-complete authentication**.
+Before launch, configure trusted domains and application name, production OAuth
+credentials, a custom email provider, verification and recovery flows, and disable
+localhost in production. Google OAuth and email infrastructure are deferred.
 
 ## UI primitives
 

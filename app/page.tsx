@@ -1,45 +1,45 @@
-import { auth } from '@/lib/auth/server';
-import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
 import {
   Empty,
-  EmptyContent,
-  EmptyDescription,
   EmptyHeader,
   EmptyTitle,
-} from '@/components/ui/empty';
+  EmptyDescription,
+  EmptyContent,
+} from "@/components/ui/empty"
 
-// Server components using auth methods must be rendered dynamically
-export const dynamic = 'force-dynamic';
-
-export default async function Home() {
-  const { data: session } = await auth.getSession();
-
-  if (session?.user) {
-    return (
+export default function Home() {
+  return (
+    <main className="mx-auto max-w-3xl p-6">
       <Empty>
         <EmptyHeader>
-          <EmptyTitle>Logged in</EmptyTitle>
-          <EmptyDescription>Signed in as {session.user.name}</EmptyDescription>
+          <EmptyTitle role="heading" aria-level={1}>
+            JobSync Cloud
+          </EmptyTitle>
+          <EmptyDescription>
+            A home for your job search. Account setup is available now.
+          </EmptyDescription>
         </EmptyHeader>
+        <EmptyContent>
+          <Button nativeButton={false} render={<Link href="/auth/sign-up" />}>
+            Create account
+          </Button>
+          <Button
+            variant="neutral"
+            nativeButton={false}
+            render={<Link href="/auth/sign-in" />}
+          >
+            Sign in
+          </Button>
+          <Button
+            variant="neutral"
+            nativeButton={false}
+            render={<Link href="/dashboard" />}
+          >
+            Dashboard
+          </Button>
+        </EmptyContent>
       </Empty>
-    );
-  }
-
-  return (
-    <Empty>
-      <EmptyHeader>
-        <EmptyTitle>Not logged in</EmptyTitle>
-        <EmptyDescription>Create an account or sign in to continue.</EmptyDescription>
-      </EmptyHeader>
-      <EmptyContent>
-        <Button nativeButton={false} render={<Link href="/auth/sign-up" />}>
-          Sign up
-        </Button>
-        <Button variant="neutral" nativeButton={false} render={<Link href="/auth/sign-in" />}>
-          Sign in
-        </Button>
-      </EmptyContent>
-    </Empty>
-  );
+    </main>
+  )
 }

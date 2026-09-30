@@ -7,6 +7,20 @@ import type { Prisma } from "../lib/generated/prisma/client"
 nextEnv.loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production")
 const { db } = await import("../lib/db")
 const { checkDatabaseHealth } = await import("../lib/db-health")
+const { ensureUserProfile } = await import("../lib/auth/user-profile")
+const { createSessionContext } = await import("../lib/auth/session-context")
+
+async function verifiedUser(id: string, name: string) {
+  return createSessionContext(
+    async () => ({
+      data: { user: { id, name, email: "test@example.com" } },
+      error: null,
+    }),
+    () => {
+      throw new Error("Unexpected redirect")
+    }
+  ).requireCurrentAuthUser()
+}
 
 after(async () => db.$disconnect())
 
@@ -43,6 +57,61 @@ async function createOwners(tx: Prisma.TransactionClient) {
 
 test("all foundation tables are readable through the runtime adapter", async () => {
   await checkDatabaseHealth()
+})
+
+test("session profile provisioning is idempotent and preserves app profile edits", async () => {
+  const rollback = new Error("Rollback profile provisioning test")
+  await assert.rejects(
+    db.$transaction(async (tx) => {
+      const user = await verifiedUser(
+        `profile-test-${randomUUID()}`,
+        "Auth name"
+      )
+      const profile = await ensureUserProfile(user, tx)
+      assert.equal(profile.id, user.id)
+      assert.equal(profile.displayName, user.name)
+
+      const repeated = await ensureUserProfile(user, tx)
+      assert.deepEqual(repeated, profile)
+
+      const edited = await tx.userProfile.update({
+        where: { id: user.id },
+        data: { displayName: "App name", timezone: "America/Chicago" },
+      })
+      const existing = await ensureUserProfile(
+        await verifiedUser(user.id, "Later auth name"),
+        tx
+      )
+      assert.equal(existing.createdAt.getTime(), profile.createdAt.getTime())
+      assert.equal(existing.updatedAt.getTime(), edited.updatedAt.getTime())
+      assert.equal(existing.displayName, "App name")
+      assert.equal(existing.timezone, "America/Chicago")
+      assert.equal(await tx.userProfile.count({ where: { id: user.id } }), 1)
+      throw rollback
+    }),
+    (error: unknown) => error === rollback
+  )
+})
+
+test("independent concurrent first requests return exactly one profile", async () => {
+  const user = await verifiedUser(
+    `profile-race-test-${randomUUID()}`,
+    "Concurrent auth name"
+  )
+  try {
+    const profiles = await Promise.all(
+      Array.from({ length: 8 }, () => ensureUserProfile(user))
+    )
+    assert.equal(profiles.length, 8)
+    for (const profile of profiles) {
+      assert.equal(profile.id, user.id)
+      assert.equal(profile.displayName, user.name)
+      assert.equal(profile.createdAt.getTime(), profiles[0].createdAt.getTime())
+    }
+    assert.equal(await db.userProfile.count({ where: { id: user.id } }), 1)
+  } finally {
+    await db.userProfile.deleteMany({ where: { id: user.id } })
+  }
 })
 
 test("resume versions cannot reference another owner's resume", async () => {

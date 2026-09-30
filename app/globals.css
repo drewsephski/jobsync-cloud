@@ -71,10 +71,6 @@
     color: var(--foreground);
     background-color: var(--background);
     min-height: 100svh;
-    display: grid;
-    grid-template-columns: min(100%, 24rem);
-    place-content: center;
-    padding: 1.5rem;
     }
   h1, h2, h3, h4, h5, h6 {
     font-weight: var(--font-weight-heading);

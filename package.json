@@ -17,7 +17,8 @@
     "db:studio": "prisma studio",
     "db:validate": "prisma validate",
     "db:smoke": "node --conditions=react-server --import tsx scripts/db-smoke.ts",
-    "db:test": "node --conditions=react-server --import tsx --test tests/db-foundation.test.ts"
+    "db:test": "node --conditions=react-server --import tsx --test tests/db-foundation.test.ts",
+    "auth:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/auth-boundary.test.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.8.0",

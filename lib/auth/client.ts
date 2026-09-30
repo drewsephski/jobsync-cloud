@@ -1,5 +1,5 @@
-'use client';
+"use client"
 
-import { createAuthClient } from '@neondatabase/auth/next';
+import { createAuthClient } from "@neondatabase/auth/next"
 
-export const authClient = createAuthClient();
+export const authClient = createAuthClient()

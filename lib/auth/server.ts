@@ -1,11 +1,12 @@
-import { createNeonAuth } from '@neondatabase/auth/next/server';
+import "server-only"
+import { createNeonAuth } from "@neondatabase/auth/next/server"
+import { serverEnv } from "@/lib/server-env"
 
 export const auth = createNeonAuth({
-  baseUrl: process.env.NEON_AUTH_BASE_URL!,
+  baseUrl: serverEnv.NEON_AUTH_BASE_URL,
   cookies: {
-    secret: process.env.NEON_AUTH_COOKIE_SECRET!,
+    secret: serverEnv.NEON_AUTH_COOKIE_SECRET,
     // sessionDataTtl: 300, // optional session_data cache TTL in seconds (default: 300)
   },
-  // logLevel: 'silent', // disable Managed Better Auth logging
-  // logLevel: 'debug',  // verbose proxy/upstream logging
-});
+  logLevel: "silent", // Provider diagnostics can contain sensitive response data.
+})
