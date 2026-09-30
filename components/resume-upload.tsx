@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { CardDescription } from "@/components/ui/card"
@@ -21,11 +21,6 @@ type UploadIntentResponse = {
     headers: Record<string, string>
   }
   expiresAt: string
-}
-
-type CompleteResponse = {
-  status: "uploaded"
-  actualSizeBytes: number
 }
 
 type DownloadResponse = {
@@ -71,16 +66,81 @@ function formatSize(size: number) {
     : `${(size / (1024 * 1024)).toFixed(1)} MiB`
 }
 
-export function ResumeUpload() {
+export function ResumeUpload({
+  initialUploadId = null,
+}: {
+  initialUploadId?: string | null
+}) {
   const [file, setFile] = useState<File | null>(null)
-  const [status, setStatus] = useState("Choose a PDF or DOCX file to begin.")
+  const [status, setStatus] = useState(
+    initialUploadId
+      ? "Upload received. Checking the file…"
+      : "Choose a PDF or DOCX file to begin."
+  )
   const [error, setError] = useState<string | null>(null)
-  const [uploadId, setUploadId] = useState<string | null>(null)
+  const [uploadId, setUploadId] = useState<string | null>(initialUploadId)
+  const [validated, setValidated] = useState(false)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!uploadId) return
+    const abort = new AbortController()
+    async function poll() {
+      const deadline = Date.now() + 45_000
+      let delay = 0
+      while (!abort.signal.aborted && Date.now() < deadline) {
+        if (delay)
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(done, delay)
+            function done() {
+              clearTimeout(timer)
+              abort.signal.removeEventListener("abort", done)
+              resolve()
+            }
+            abort.signal.addEventListener("abort", done, { once: true })
+          })
+        if (abort.signal.aborted) return
+        try {
+          const result = await requestJson<{
+            validation: {
+              state: "pending" | "valid" | "rejected"
+              message: string | null
+            }
+          }>(`/api/resume-uploads/${encodeURIComponent(uploadId!)}`, {
+            signal: AbortSignal.any([abort.signal, AbortSignal.timeout(5000)]),
+          })
+          if (abort.signal.aborted) return
+          if (result.validation.state === "valid") {
+            setValidated(true)
+            setStatus("Resume file validated.")
+            return
+          }
+          if (result.validation.state === "rejected") {
+            setStatus("The resume file was rejected.")
+            setError(
+              result.validation.message ??
+                "Start a new upload with a valid PDF or DOCX."
+            )
+            return
+          }
+        } catch {
+          if (abort.signal.aborted) return
+        }
+        delay = Math.min(delay ? delay * 1.5 : 1000, 5000)
+      }
+      if (!abort.signal.aborted)
+        setStatus(
+          "Your resume is still processing. You can leave this page; processing will continue in the background."
+        )
+    }
+    void poll()
+    return () => abort.abort()
+  }, [uploadId])
 
   function selectFile(nextFile: File | null) {
     setFile(nextFile)
     setUploadId(null)
+    setValidated(false)
     setError(null)
     setStatus(
       nextFile ? "Ready to upload." : "Choose a PDF or DOCX file to begin."
@@ -92,6 +152,7 @@ export function ResumeUpload() {
     setBusy(true)
     setError(null)
     setUploadId(null)
+    setValidated(false)
 
     try {
       const intent = uploadIntentSchema.parse({
@@ -120,16 +181,18 @@ export function ResumeUpload() {
       })
       if (!putResponse.ok) throw new Error("Upload request failed")
 
-      setStatus("Verifying uploaded file…")
-      const completed = await requestJson<CompleteResponse>(
-        `/api/resume-uploads/${encodeURIComponent(signed.uploadId)}/complete`,
-        { method: "POST" }
-      )
-      if (completed.status !== "uploaded")
-        throw new Error("Upload was not accepted")
-
+      setStatus("Upload received. Checking the file…")
       setUploadId(signed.uploadId)
-      setStatus(`Upload complete · ${formatSize(completed.actualSizeBytes)}`)
+      // A trigger may already have rejected the file. Poll its durable status
+      // even if this optional transport reconciliation fails or races validation.
+      try {
+        await requestJson(
+          `/api/resume-uploads/${encodeURIComponent(signed.uploadId)}/complete`,
+          { method: "POST" }
+        )
+      } catch {
+        // Receipt is proven by the successful PUT; background recovery continues.
+      }
     } catch (caught) {
       const statusCode =
         typeof caught === "object" && caught !== null && "status" in caught
@@ -188,8 +251,8 @@ export function ResumeUpload() {
           aria-describedby="resume-file-help"
         />
         <CardDescription id="resume-file-help">
-          PDF or DOCX · up to {formatSize(MAX_RESUME_FILE_SIZE_BYTES)}.
-          Transport checks only; file content validation is deferred.
+          PDF or DOCX · up to {formatSize(MAX_RESUME_FILE_SIZE_BYTES)}. File
+          validation continues in the background after upload.
         </CardDescription>
       </div>
 
@@ -207,7 +270,7 @@ export function ResumeUpload() {
         >
           {busy ? "Working…" : "Upload resume"}
         </Button>
-        {uploadId ? (
+        {uploadId && validated ? (
           <Button
             type="button"
             variant="neutral"

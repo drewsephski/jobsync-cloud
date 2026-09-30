@@ -3,8 +3,8 @@
 Next.js 16 application with Neon Postgres, Neon Managed Better Auth, and private Neon Object Storage.
 The protected `/dashboard` establishes the server-side identity and application
 profile boundary. `/dashboard/resume` provides direct presigned browser uploads
-and ownership-checked private downloads. Functions/triggers, AI, billing, and the
-final application shell are deferred.
+and ownership-checked private downloads. Neon Functions validate PDF/DOCX bytes asynchronously; AI, billing, and the
+final application shell remain deferred.
 
 Use Node.js 22.12+ or 24 LTS and pnpm (the repository pins pnpm in `package.json`).
 
@@ -67,10 +67,10 @@ outside the application schema and must remain managed by Neon.
 - All timestamps use UTC instants (`timestamptz`). JSON uses JSONB; keywords use a
   Postgres text array. Compensation is whole annual USD; AI cost is integer micro-USD.
 - Run and reservation idempotency keys are globally unique, including service-owned
-  runs. Future callers must namespace keys by owner, operation, and logical request.
-- Processing runs persist retries, leases, checkpoints, and cancellation. Future
-  workers must claim atomically and qualify checkpoints/completion by the current
-  lease token. The schema alone does not implement stale-worker protection or retries.
+  runs. Callers namespace keys by owner, operation, and logical request.
+- Processing runs persist retries, leases, checkpoints, and cancellation. The
+  shared processing service claims atomically and requires a live lease token for
+  every worker mutation; validation metadata and run completion commit together.
 - Accounting distinguishes unknown final usage/cost (`null`) from confirmed zero.
   Reconciliation is explicit; expiration never implies an automatic refund.
 - Deletes restrict dependent records so future account cleanup can reconcile work
@@ -127,9 +127,10 @@ pnpm dlx shadcn@latest add button
 
 ## Private resume transport
 
-`neon.ts` uses the stable `@neon/config/v1` GA API and declares only existing Auth
-and the **private** `jobsync-files` bucket. It does not change compute sizing,
-branch protection/TTL, or declare Functions, triggers, AI Gateway, or Data API.
+`neon.ts` uses the stable `@neon/config/v1` GA API and preserves existing Auth
+and the **private** `jobsync-files` bucket, plus the validation Function and two
+triggers described below. It does not change compute sizing, branch protection/TTL,
+AI Gateway, or Data API.
 Link the CLI to the explicitly verified isolated development project/branch first;
 a branch called `production` is not evidence of isolation. Review the plan and
 ensure the existing Managed Better Auth integration is preserved before deploying.
@@ -161,7 +162,7 @@ checks enforce positive declared sizes up to 5 MiB, expiry after creation, allow
 MIME types, and consistent uploaded metadata. Actual size uses BIGINT so even
 malicious objects beyond the Postgres integer range can be durably rejected.
 Pending records represent abandoned uploads durably; completion expires stale
-ones. Scheduled cleanup is deferred.
+ones. Scheduled recovery reconciles these records and retries best-effort object cleanup.
 A signing failure leaves the pending row until expiry; a retry creates a fresh ID.
 
 The server generates immutable keys:
@@ -187,12 +188,11 @@ returns a fresh 60-second GET capability with `Cache-Control: no-store`, and nev
 persists it. Foreign and missing IDs return equivalent 404 responses. Browser
 capability requests also reject an Origin that differs from APP_ORIGIN.
 
-**Uploaded is transport acceptance only.** Content-Type is browser-controlled;
-this slice does not prove PDF/DOCX byte validity, ZIP safety, or semantic resume
-acceptance. No ResumeVersion, ProcessingRun, extraction, or AI work is created.
-The framework-independent reconciliation service has an internal stored-object-key
-entry that resolves metadata/ownership from Postgres for the next trusted trigger
-slice. Event paths alone never establish ownership.
+**Uploaded is transport acceptance only.** A successful deterministic byte
+validation leaves this transport status unchanged and sets validation metadata.
+Invalid bytes become rejected. No ResumeVersion, extracted text, semantic resume
+facts, or AI work is created. Reconciliation resolves a stored object key through
+Postgres first; event paths alone never establish ownership.
 
 `storage:smoke` is read-only and writes no objects. `storage:test` uses mocked
 storage plus isolated Postgres constraint/concurrency tests; DB fixtures roll back
@@ -216,3 +216,160 @@ uses copy-on-write snapshots, so parent data still needs sanitization.
 Current official references: [Neon config](https://neon.com/docs/reference/neon-ts),
 [Object Storage setup](https://neon.com/docs/storage/get-started),
 [S3 compatibility](https://neon.com/docs/storage/s3-compatibility).
+
+
+## Asynchronous resume validation
+
+`resumeworker` is a Node.js 24 Neon Function with POST `/object-created` and
+POST `/recover`. The native `resume-upload-created` trigger watches private
+`jobsync-files` keys with prefix `users/` and targets `/object-created`.
+Unknown keys are safely ignored; the prefix includes potential future non-resume
+objects. The worker resolves `ResumeUpload.objectKey` before storage access,
+then uses the persisted owner, declaration, key, and actual size. It never infers
+identity from key segments. GET `/api/resume-uploads/{uploadId}` derives the owner
+from the verified session and exposes only safe transport/validation state and
+an actionable rejection message. Missing and foreign IDs both return 404.
+
+Both handlers require `X-Neon-Trigger-Invocation-Id`, version 1 of the JSON
+envelope, matching body `invocation_id`, and the correct trigger/data schema.
+Neon strips client-supplied `X-Neon-*` headers at its deployed edge; the header
+is trigger-origin attestation, not a secret or owner ID. Local replay can spoof
+this header and is only a handler test. Ordinary deployed direct calls cannot
+supply it.
+
+**Neon Functions and triggers wake processing; Postgres owns durable run state.
+They are not treated as a durable queue.** Duplicate or interrupted invocations
+are expected; no undocumented delivery, retry, exactly-once, or strict scheduling
+guarantee is assumed. The canonical kind is `resume_validate_v1`, with key
+`user:{ownerUserId}:resume-validate:v1:{uploadId}`. An atomic Postgres upsert
+returns the existing logical run and never resets terminal work.
+
+Claims use short transactions, `FOR UPDATE SKIP LOCKED`, a fresh UUID lease,
+a 120-second lease, and incremented attempts. The first `startedAt` is preserved.
+A short transaction advisory lock makes the concurrency budgets atomic: at most
+five live runs globally and two per owner. Every renewal, checkpoint, retry,
+completion, failure, and cancellation requires ID, current token, running state,
+and an unexpired lease according to Postgres time. No transaction spans downloads
+or parsing. Completion and upload validation metadata are one transaction.
+
+Transient infrastructure errors use sanitized `dependency_unavailable`, future
+`retry_wait`, and exponential backoff: 30 × 2^(attempt−1) seconds, base capped at
+900 seconds, with 0.75–1.25 jitter. There are five maximum claims, including expired
+lease reclaims. A fifth-attempt crash is swept to `attempts_exhausted`; failed
+runs do not restart automatically. Cancellation is checked before download,
+after download, after validation, and atomically at terminal writes.
+
+Permanent validation errors atomically reject the upload and fail the run with
+a stable domain code. Invalid-object deletion is best effort and cannot reverse
+rejection; bounded recovery also retries cleanup. A canceled run leaves the
+transport record unchanged. No customer-facing retry/cancel control is included.
+
+`ResumeUpload` adds nullable `validationCompletedAt` (timestamptz),
+`detectedFormat` (pdf/docx enum), and `contentSha256` (64 lowercase hex).
+The hash is computed with Node crypto only after successful validation. SQL
+checks require paired hash/format and terminal validation time; all previous
+transport checks remain. Invalid content has no hash or detected format.
+Migration: `20260930190000_resume_validation`.
+
+Validation limits are centralized in `lib/validation/constants.ts`:
+
+- Download: 5 MiB plus one sentinel byte via a bounded Range request; stream
+  accumulation stops at 5 MiB and must match the persisted actual size.
+- PDF: exact `%PDF-` signature, matching declaration, unpdf 1.8.1/PDF.js
+  structural parsing with `stopAtErrors`, all page operator lists validated,
+  at most 100 pages, no OCR/text retention. Encrypted PDFs, including empty user
+  passwords, are rejected. A terminable 256 MiB Node worker thread enforces
+  a 15-second parser deadline. Parser package loading failures retry; corrupt,
+  encrypted, excessive/timeout documents are permanent content failures.
+- DOCX: classic single-disk ZIP only, valid EOCD/complete central directory/local
+  headers, at most 1,000 entries and 100 MiB claimed uncompressed bytes checked
+  **before** inflation. Reject Zip64, unsupported flags/methods, encryption,
+  malformed descriptors, overlaps, duplicate/unsafe paths, and integer/bounds
+  anomalies. Bounded in-memory store/deflate validation checks actual lengths
+  and CRCs. Required package XML (`[Content_Types].xml`, `_rels/.rels`,
+  `word/document.xml`) is limited to 1 MiB each, syntax-validated with
+  fast-xml-parser 5.11.2, rejects DTD/entities, and must identify a Word main
+  document/body. No archive entry is written to disk.
+
+The hourly `resume-recovery` cron is **`17 * * * *` UTC**, targeting `/recover`.
+It reconciles up to five old pending uploads, repairs up to five missing runs,
+processes at most five due/expired runs, and retries up to five rejected/expired
+object deletions. Storage modification time permits recovery of objects uploaded
+within their signing window despite delayed events; abandoned or late uploads
+expire. Millisecond/second storage timestamp precision is accounted for.
+
+The hourly cadence is provisional while there are no users. Scheduled triggers
+wake the Function/database even from scale-to-zero. Before launch measure event
+loss/retry behavior, recovery latency, Function cost, and database wake cost; then
+choose the production cadence. Child branches inherit triggers disabled; enable
+them deliberately only on isolated test branches.
+
+The browser polls immediately, then backs off to five-second intervals and stops
+after about 45 seconds. Each request has a five-second timeout. Polling aborts on
+unmount/change. Users can leave the page; processing continues in Neon. Revisiting
+the page checks the latest owner-qualified upload. There is **no AI call,
+resume text storage, extraction, or ResumeVersion creation** in this slice.
+
+### Runtime boundaries and local workflow
+
+`lib/backend` factories accept explicit DB/S3 configuration, import no Next.js,
+React, or `server-only`, and read no application environment. `lib/domain`
+contains the shared upload/run logic. Existing Next `lib/db.ts` and
+`lib/storage/*` adapters remain guarded with `server-only`; browser components
+import only the credential-free file constants/schema. The Function validates
+only Neon-injected `DATABASE_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
+`AWS_ENDPOINT_URL_S3`, and `AWS_REGION`. It needs neither
+`NEON_AUTH_COOKIE_SECRET` nor `APP_ORIGIN`. unpdf is explicitly staged as an
+external Function package so the isolated parser thread can resolve it.
+
+```bash
+pnpm db:deploy                 # explicitly verified isolated database
+pnpm worker:test               # real Postgres plus infrastructure-boundary tests
+pnpm validation:test           # tiny sanitized PDF/DOCX/encryption fixtures
+neon config plan
+neon deploy --no-env-pull       # verified isolated branch only
+neon dev                       # resumeworker at localhost:8787
+node --conditions=react-server --import tsx scripts/worker-local-proof.ts
+neon functions list
+neon triggers list
+neon logs query --source function --since 30m --limit 100
+```
+
+The CLI currently requires declared triggers to exist before `neon dev`.
+For pre-deploy testing, use a temporary local `neon.ts` that preserves Auth,
+the existing private bucket, and the Function's externalPackages/dev declarations
+but omits triggers. Keep the same explicitly verified isolated branch context.
+This does not change remote infrastructure.
+
+Local replay envelope (only against `neon dev`):
+
+```json
+{
+  "version": 1,
+  "invocation_id": "local-test-1",
+  "trigger": { "type": "storage_object_created", "id": "local-test", "name": "local-test" },
+  "data": { "bucket_name": "jobsync-files", "object_key": "persisted-test-object-key" }
+}
+```
+
+POST it to `http://localhost:8787/object-created` with
+`X-Neon-Trigger-Invocation-Id: local-test-1`. For `/recover`, use
+`trigger.type: "schedule"` and `data: { "scheduled_at": "2026-09-30T23:17:00Z" }`.
+No storage credentials, signed URLs, file bytes/content, or raw dependency errors
+belong in logs. Retention is provider-limited; use sanitized run/upload/invocation
+IDs, kind, attempt, status, duration, and error codes for correlation.
+
+The optional actual-schedule proof requires temporarily deploying a minute cron
+on the approved isolated branch, then restoring the hourly config and deploying
+again. It only mutates its own tagged fixture and cleans it in `finally`:
+
+```bash
+JOBSYNC_WORKER_LIVE_BRANCH=lively-shape-65452824/br-tiny-tree-b44fo1lv \
+  node --conditions=react-server --import tsx scripts/worker-schedule-proof.ts
+```
+
+Current official references: [Functions](https://neon.com/docs/compute/functions/overview),
+[triggers and attestation](https://neon.com/docs/compute/functions/triggers/overview),
+[Function environments](https://neon.com/docs/compute/functions/environment-variables),
+[runtime limits](https://neon.com/docs/compute/functions/reference/runtime-limits),
+[unpdf](https://github.com/unjs/unpdf).

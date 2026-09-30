@@ -37,6 +37,9 @@ mock.module(new URL("../lib/storage/uploads.ts", import.meta.url).href, {
       reconcileResumeUpload: async () => {
         throw new UploadError("upload_not_found", 404)
       },
+      readStatus: async () => {
+        throw new UploadError("upload_not_found", 404)
+      },
       createDownloadUrl: async () => {
         throw new UploadError("upload_not_found", 404)
       },
@@ -48,6 +51,8 @@ const { POST: complete } =
   await import("../app/api/resume-uploads/[uploadId]/complete/route")
 const { POST: download } =
   await import("../app/api/resume-uploads/[uploadId]/download-url/route")
+const { GET: status } =
+  await import("../app/api/resume-uploads/[uploadId]/route")
 const { uploadApi } = await import("../lib/storage/api")
 const request = (body = "{}", origin = "http://localhost:3000") =>
   new Request("http://localhost:3000/api/resume-uploads", {
@@ -65,6 +70,10 @@ test("anonymous storage endpoints return 401 without provisioning or signing", a
       complete(request(), { params: Promise.resolve({ uploadId: "missing" }) }),
     () =>
       download(request(), { params: Promise.resolve({ uploadId: "missing" }) }),
+    () =>
+      status(new Request("http://localhost:3000/api/resume-uploads/missing"), {
+        params: Promise.resolve({ uploadId: "missing" }),
+      }),
   ]) {
     const response = await call()
     assert.equal(response.status, 401)
@@ -85,7 +94,7 @@ test("API validates JSON and rejects cross-origin capability requests", async ()
   assert.equal(intentCalls, 1)
 })
 test("missing/inaccessible downloads and completion preserve sanitized 404", async () => {
-  for (const handler of [complete, download]) {
+  for (const handler of [complete, download, status]) {
     const response = await handler(request(), {
       params: Promise.resolve({ uploadId: "missing" }),
     })

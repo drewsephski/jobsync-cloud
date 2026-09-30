@@ -6,10 +6,16 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { ResumeUpload } from "@/components/resume-upload"
+import { db } from "@/lib/db"
 import { requireCurrentProfile } from "@/lib/auth/context"
 
 export default async function ResumePage() {
-  await requireCurrentProfile()
+  const { user } = await requireCurrentProfile()
+  const latest = await db.resumeUpload.findFirst({
+    where: { ownerUserId: user.id },
+    orderBy: { createdAt: "desc" },
+    select: { id: true },
+  })
 
   return (
     <Card>
@@ -22,7 +28,7 @@ export default async function ResumePage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <ResumeUpload />
+        <ResumeUpload initialUploadId={latest?.id} />
       </CardContent>
     </Card>
   )

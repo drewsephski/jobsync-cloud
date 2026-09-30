@@ -555,6 +555,90 @@ test("expired pending uploads settle as expired and cleanup failure does not acc
   assert.equal(repository.records.get(intent.uploadId)?.status, "expired")
   assert.equal(
     storage.calls.some((call) => call.operation === "head"),
-    false
+    true
   )
+})
+
+test("owner status read exposes only safe validation state and foreign IDs are 404", async () => {
+  const { repository, uploadService } = service()
+  const owner = await verifiedUser("status-owner"),
+    foreign = await verifiedUser("status-foreign")
+  const intent = await uploadService.createResumeUploadIntent(owner, {
+    fileName: "resume.pdf",
+    contentType: PDF,
+    sizeBytes: 10,
+  })
+  const pending = await uploadService.readStatus(owner, intent.uploadId)
+  assert.deepEqual(pending, {
+    uploadId: intent.uploadId,
+    status: "pending",
+    validation: { state: "pending", completedAt: null, message: null },
+  })
+  await assert.rejects(
+    uploadService.readStatus(foreign, intent.uploadId),
+    (error) => error instanceof UploadError && error.status === 404
+  )
+  await assert.rejects(
+    uploadService.readStatus(owner, randomUUID()),
+    (error) => error instanceof UploadError && error.status === 404
+  )
+  const upload = repository.records.get(intent.uploadId)!
+  repository.records.set(upload.id, {
+    ...upload,
+    status: "uploaded",
+    validationCompletedAt: new Date("2026-09-30T12:00:00Z"),
+    detectedFormat: "pdf",
+    contentSha256: "a".repeat(64),
+  })
+  const valid = await uploadService.readStatus(owner, upload.id)
+  assert.equal(valid.validation.state, "valid")
+  assert.ok(!JSON.stringify(valid).includes(upload.objectKey))
+  assert.ok(!("contentSha256" in valid))
+})
+
+test("delayed reconciliation accepts timely immutable object and expires late upload", async () => {
+  const created = new Date("2026-09-30T12:00:00.500Z")
+  let current = created
+  const { repository, storage, uploadService } = service(() => current)
+  const owner = await verifiedUser("delayed-owner")
+  const intent = await uploadService.createResumeUploadIntent(owner, {
+    fileName: "resume.pdf",
+    contentType: PDF,
+    sizeBytes: 10,
+  })
+  storage.headResult = {
+    size: 10,
+    contentType: PDF,
+    etag: "test",
+    lastModified: new Date("2026-09-30T12:00:00Z"),
+  }
+  current = new Date("2026-09-30T13:00:00Z")
+  assert.equal(
+    (
+      await uploadService.reconcileStoredResumeUpload(
+        repository.records.get(intent.uploadId)!.objectKey
+      )
+    ).status,
+    "uploaded"
+  )
+  current = created
+  const late = await uploadService.createResumeUploadIntent(owner, {
+    fileName: "resume.pdf",
+    contentType: PDF,
+    sizeBytes: 10,
+  })
+  storage.headResult = {
+    size: 10,
+    contentType: PDF,
+    etag: "test",
+    lastModified: new Date("2026-09-30T12:06:00Z"),
+  }
+  current = new Date("2026-09-30T13:00:00Z")
+  await assert.rejects(
+    uploadService.reconcileStoredResumeUpload(
+      repository.records.get(late.uploadId)!.objectKey
+    ),
+    UploadError
+  )
+  assert.equal(repository.records.get(late.uploadId)!.status, "expired")
 })

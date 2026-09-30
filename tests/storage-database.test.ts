@@ -71,6 +71,9 @@ function uploadData(
     expiresAt: new Date(now.getTime() + 60_000),
     uploadedAt: null,
     rejectionCode: null,
+    validationCompletedAt: null,
+    detectedFormat: null,
+    contentSha256: null,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -382,5 +385,41 @@ test("Postgres durably rejects objects above the signed 32-bit size range", asyn
       })
     }
     await db.userProfile.deleteMany({ where: { id: ownerId } })
+  }
+})
+
+test("validation metadata requires completion, paired format/hash, and lowercase SHA-256", async () => {
+  for (const validation of [
+    {
+      contentSha256: "A".repeat(64),
+      detectedFormat: "pdf",
+      validationCompletedAt: new Date(),
+    },
+    {
+      contentSha256: "a".repeat(63),
+      detectedFormat: "pdf",
+      validationCompletedAt: new Date(),
+    },
+    { contentSha256: "a".repeat(64), detectedFormat: "pdf" },
+    { detectedFormat: "pdf", validationCompletedAt: new Date() },
+  ] as Array<Partial<ResumeUpload>>) {
+    await expectRejectedWrite(
+      async (tx) => {
+        const { first } = await createOwners(tx)
+        const resume = await tx.resume.create({
+          data: { ownerUserId: first, title: "Validation constraints" },
+        })
+        await tx.resumeUpload.create({
+          data: uploadData(first, resume.id, {
+            status: "uploaded",
+            actualContentType: "application/pdf",
+            actualSizeBytes: BigInt(1024),
+            uploadedAt: new Date(),
+            ...validation,
+          }),
+        })
+      },
+      ["P2010", "P2039"]
+    )
   }
 })

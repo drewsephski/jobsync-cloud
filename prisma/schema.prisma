@@ -211,28 +211,37 @@ model AiUsage {
   @@index([provider, providerRequestId])
 }
 
-// Transport acceptance only. Byte validation and semantic versions are deferred.
+// Transport lifecycle plus deterministic validation; no semantic resume facts.
+enum ResumeDetectedFormat {
+  pdf
+  docx
+}
+
 model ResumeUpload {
-  id                  String             @id @default(uuid()) @db.Uuid
-  ownerUserId         String
-  resumeId            String             @db.Uuid
-  objectKey           String             @unique
-  originalFileName    String             @db.VarChar(255)
-  declaredContentType String
-  declaredSizeBytes   Int
-  actualContentType   String?
-  actualSizeBytes     BigInt?
-  etag                String?
-  status              ResumeUploadStatus @default(pending)
-  expiresAt           DateTime           @db.Timestamptz(3)
-  uploadedAt          DateTime?          @db.Timestamptz(3)
-  rejectionCode       String?
-  createdAt           DateTime           @default(now()) @db.Timestamptz(3)
-  updatedAt           DateTime           @updatedAt @db.Timestamptz(3)
+  id                    String                @id @default(uuid()) @db.Uuid
+  ownerUserId           String
+  resumeId              String                @db.Uuid
+  objectKey             String                @unique
+  originalFileName      String                @db.VarChar(255)
+  declaredContentType   String
+  declaredSizeBytes     Int
+  actualContentType     String?
+  actualSizeBytes       BigInt?
+  etag                  String?
+  status                ResumeUploadStatus    @default(pending)
+  expiresAt             DateTime              @db.Timestamptz(3)
+  uploadedAt            DateTime?             @db.Timestamptz(3)
+  validationCompletedAt DateTime?             @db.Timestamptz(3)
+  detectedFormat        ResumeDetectedFormat?
+  contentSha256         String?               @db.VarChar(64)
+  rejectionCode         String?
+  createdAt             DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
 
   owner  UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   resume Resume      @relation(fields: [ownerUserId, resumeId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([ownerUserId, status, createdAt])
   @@index([status, expiresAt])
+  @@index([status, validationCompletedAt, createdAt])
 }
