@@ -8,6 +8,7 @@ import {
   CardContent,
 } from "./card"
 import { LinkButton } from "./link-button"
+import { supportContact } from "@/lib/support"
 export function PolicyDocument({
   title,
   intro,
@@ -17,6 +18,7 @@ export function PolicyDocument({
   intro: string
   sections: { title: string; paragraphs: string[] }[]
 }) {
+  const contact = supportContact()
   return (
     <PublicShell>
       <FieldGroup className="mx-auto max-w-3xl gap-8">
@@ -30,6 +32,18 @@ export function PolicyDocument({
             {title}
           </CardTitle>
           <CardDescription className="text-lg">{intro}</CardDescription>
+          {contact.operator && (
+            <CardDescription>Operated by {contact.operator}.</CardDescription>
+          )}
+          {contact.email && (
+            <LinkButton
+              variant="neutral"
+              className="w-fit"
+              href={`mailto:${contact.email}`}
+            >
+              Contact {contact.email}
+            </LinkButton>
+          )}
         </FieldGroup>
         {sections.map((s) => (
           <Card key={s.title}>
