@@ -55,6 +55,10 @@ next-env.d.ts
 
 /output/discovery-live-proof.json
 /output/discovery-browser-proof.json
+/output/discovery-first-use-proof.json
+/output/discovery-baseline-proof.json
+/output/discovery-full-suite.log
+/output/discovery-warm-catalog.json
 
 /output/application-preview-proof.json
 

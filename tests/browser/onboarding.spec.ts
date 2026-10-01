@@ -34,6 +34,49 @@ test.afterAll(async () => {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
   })
   try {
+    await db.userProfile.updateMany({
+      where: { id: { in: users } },
+      data: { deletionRequestedAt: new Date() },
+    })
+    await db.processingRun.updateMany({
+      where: {
+        ownerUserId: { in: users },
+        status: { in: ["pending", "retry_wait"] },
+      },
+      data: { status: "canceled", cancellationRequestedAt: new Date() },
+    })
+    await expect
+      .poll(
+        () =>
+          db.processingRun.count({
+            where: { ownerUserId: { in: users }, status: "running" },
+          }),
+        { timeout: 45_000 }
+      )
+      .toBe(0)
+    const usage = await db.aiUsage.findMany({
+      where: { ownerUserId: { in: users } },
+      select: {
+        feature: true,
+        status: true,
+        inputTokens: true,
+        outputTokens: true,
+        costMicroUsd: true,
+      },
+    })
+    console.log(
+      JSON.stringify(
+        { proof: "onboarding-discovery-receipts", usage },
+        (_key, value) => (typeof value === "bigint" ? value.toString() : value)
+      )
+    )
+    await db.application.deleteMany({ where: { ownerUserId: { in: users } } })
+    await db.userJobState.deleteMany({ where: { ownerUserId: { in: users } } })
+    await db.jobMatch.deleteMany({ where: { ownerUserId: { in: users } } })
+    await db.companyWatch.deleteMany({ where: { ownerUserId: { in: users } } })
+    await db.discoveryAllowance.deleteMany({
+      where: { ownerUserId: { in: users } },
+    })
     for (const upload of await db.resumeUpload.findMany({
       where: { ownerUserId: { in: users } },
     })) {
@@ -187,7 +230,9 @@ async function resumeAndPreferences(
     page.getByRole("heading", { name: "Review your resume", exact: true })
   ).toBeVisible({ timeout: 120000 })
   const before = await state(page)
-  const usageBefore = await db.aiUsage.count({ where: { ownerUserId: owner } })
+  const usageBefore = await db.aiUsage.count({
+    where: { ownerUserId: owner, feature: "resume_structure_v1" },
+  })
   expect(usageBefore).toBe(live ? 1 : 0)
   expect(before.version.confirmed).toBe(false)
   await expect(
@@ -328,9 +373,11 @@ async function resumeAndPreferences(
   await page.reload()
   await expect(page).toHaveURL(/\/dashboard$/)
   expect((await state(page)).completedAt).toBe(completed.completedAt)
-  expect(await db.aiUsage.count({ where: { ownerUserId: owner } })).toBe(
-    usageBefore
-  )
+  expect(
+    await db.aiUsage.count({
+      where: { ownerUserId: owner, feature: "resume_structure_v1" },
+    })
+  ).toBe(usageBefore)
   expect(await db.resumeVersion.count({ where: { ownerUserId: owner } })).toBe(
     3
   )
@@ -341,14 +388,14 @@ async function resumeAndPreferences(
       roles: 2,
       confirmedAt: confirmed.version.confirmedAt,
       completedAt: completed.completedAt,
-      providerInvocationsAfterReviewStarted: 0,
+      resumeProviderInvocationsAfterReviewStarted: 0,
       uploadId: completed.upload.id,
     })
   )
   return completed
 }
 
-test("@fixture durable resume review, stale tabs, mobile keyboard, route guards, no AI", async ({
+test("@fixture durable resume review, stale tabs, mobile keyboard, route guards, no resume AI", async ({
   page,
   context,
 }) => {

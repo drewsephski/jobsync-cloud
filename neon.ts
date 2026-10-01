@@ -29,6 +29,9 @@ export default defineConfig({
         ...(process.env.OPENROUTER_API_KEY
           ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
           : {}),
+        ...(process.env.DISCOVERY_WAKE_SECRET
+          ? { DISCOVERY_WAKE_SECRET: process.env.DISCOVERY_WAKE_SECRET }
+          : {}),
       },
       dev: { port: 8788 },
     },

@@ -30,7 +30,7 @@
     "ai:live-proof": "node --import tsx scripts/ai-live-proof.ts",
     "onboarding:browser:test": "playwright test --grep @fixture",
     "onboarding:live-proof": "playwright test --grep @live",
-    "discovery:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/discovery-providers.test.ts tests/discovery-api.test.ts tests/discovery.test.ts",
+    "discovery:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/discovery-providers.test.ts tests/discovery-api.test.ts tests/discovery-wake.test.ts tests/discovery.test.ts",
     "discovery:seed": "node --import tsx scripts/seed-discovery.ts",
     "discovery:live-proof": "node --conditions=react-server --import tsx scripts/discovery-live-proof.ts",
     "applications:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/applications.test.ts tests/applications-api.test.ts",

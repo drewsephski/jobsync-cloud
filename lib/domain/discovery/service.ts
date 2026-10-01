@@ -7,6 +7,8 @@ import { UploadError } from "../resume-upload/service"
 import { targetSchema } from "../onboarding/schema"
 import { ALGORITHM_VERSION } from "./relevance"
 import { profileInputs } from "./inputs"
+import { createDiscoveryPlanner, MATCH_KIND } from "./planner"
+import { freshBoardFilter } from "./catalog"
 const watchSchema = z.strictObject({
   action: z.literal("watch"),
   boardId: z.uuid(),
@@ -28,11 +30,17 @@ const preferencesSchema = z
       new Set(v.targets.map((t) => t.targetTitle.toLowerCase())).size ===
       v.targets.length
   )
-const mutationSchema = z.union([watchSchema, stateSchema, preferencesSchema])
+const mutationSchema = z.union([
+  watchSchema,
+  stateSchema,
+  preferencesSchema,
+  z.strictObject({ action: z.literal("find") }),
+])
 export type DiscoveryData = Awaited<
   ReturnType<ReturnType<typeof createDiscoveryService>["read"]>
 >
 export function createDiscoveryService(db: PrismaClient) {
+  const plan = createDiscoveryPlanner(db)
   async function read(user: CurrentAuthUser, search = "", filter = "new") {
     const query = search.trim().slice(0, 120)
     return db.$transaction(
@@ -73,7 +81,7 @@ export function createDiscoveryService(db: PrismaClient) {
                 preferenceRevision: input.profile.preferenceRevision,
                 preferenceHash: input.preferenceHash,
                 algorithmVersion: ALGORITHM_VERSION,
-                posting: { boardId: { in: watches.map((w) => w.boardId) } },
+                posting: { board: freshBoardFilter() },
               },
               include: {
                 posting: { include: { board: { include: { company: true } } } },
@@ -122,7 +130,11 @@ export function createDiscoveryService(db: PrismaClient) {
           match.preferenceHash === input.preferenceHash &&
           match.algorithmVersion === ALGORITHM_VERSION &&
           match.postingVersion === match.posting.contentVersion &&
-          match.postingHash === match.posting.contentHash
+          match.postingHash === match.posting.contentHash &&
+          match.posting.board.enabled &&
+          !!match.posting.board.lastSuccessAt &&
+          match.posting.board.lastSuccessAt >=
+            freshBoardFilter().lastSuccessAt.gte
         const unique = new Map<string, (typeof matches)[number]>()
         // Keep saved/dismissed history even after inputs change; stale AI scores are
         // never presented as current. New results require the exact active inputs.
@@ -138,7 +150,11 @@ export function createDiscoveryService(db: PrismaClient) {
           )
             unique.set(match.jobPostingId, match)
         }
-        const current = [...unique.values()]
+        const current = [...unique.values()].sort(
+          (a, b) =>
+            b.relevance - a.relevance ||
+            a.jobPostingId.localeCompare(b.jobPostingId)
+        )
         const counts = { new: 0, saved: 0, dismissed: 0 }
         for (const match of current)
           if (
@@ -158,6 +174,21 @@ export function createDiscoveryService(db: PrismaClient) {
           errorCode: b.errorCode,
         })
         return {
+          enhancing:
+            (await tx.processingRun.count({
+              where: {
+                ownerUserId: user.id,
+                kind: MATCH_KIND,
+                status: { in: ["pending", "running", "retry_wait"] },
+                availableAt: { lte: new Date() },
+              },
+            })) > 0,
+          monitoring: watches.some(
+            (w) =>
+              w.board.enabled &&
+              !w.board.errorCode &&
+              (!w.board.lastSuccessAt || w.board.nextFetchAt <= new Date())
+          ),
           watchLimit: entitlement.limits?.watches ?? 0,
           ready: !!input,
           preferenceRevision: input?.profile.preferenceRevision ?? 0,
@@ -192,6 +223,8 @@ export function createDiscoveryService(db: PrismaClient) {
                 ?.archivedAt,
               title: m.posting.title,
               company: m.posting.board.company.name,
+              boardId: m.posting.boardId,
+              watched: watches.some((w) => w.boardId === m.posting.boardId),
               provider: m.posting.board.provider,
               location: m.posting.location,
               remote: m.posting.remote,
@@ -203,7 +236,7 @@ export function createDiscoveryService(db: PrismaClient) {
               reasons: m.reasons,
               stale: !isCurrent(m),
               aiScore: isCurrent(m) && m.aiAnalyzedAt ? m.aiScore : null,
-              recommendation: m.recommendation,
+              recommendation: isCurrent(m) ? m.recommendation : null,
               rationale: isCurrent(m) ? m.rationale : null,
               aiAnalyzedAt: m.aiAnalyzedAt?.toISOString() ?? null,
               state: stateMap.get(m.jobPostingId) ?? "new",
@@ -227,7 +260,10 @@ export function createDiscoveryService(db: PrismaClient) {
         })
         if (!profile.onboardingCompletedAt)
           throw new UploadError("onboarding_required", 409)
-        if (action.action === "watch") {
+        if (action.action === "find") {
+          if (!(await profileInputs(tx, user.id)))
+            throw new UploadError("resume_not_confirmed", 409)
+        } else if (action.action === "watch") {
           const board = await tx.atsBoard.findFirst({
             where: { id: action.boardId, enabled: true },
           })
@@ -311,7 +347,21 @@ export function createDiscoveryService(db: PrismaClient) {
       },
       { timeout: 30_000 }
     )
-    return { ok: true }
+    if (action.action === "find" || action.action === "preferences") {
+      const funnel = await plan(user.id)
+      return {
+        ok: true,
+        data: await read(user),
+        funnel,
+        wake: { ownerUserId: user.id },
+      }
+    }
+    return {
+      ok: true,
+      ...(action.action === "watch" && action.watching
+        ? { wake: { ownerUserId: user.id, boardId: action.boardId } }
+        : {}),
+    }
   }
   return { read, mutate }
 }

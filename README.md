@@ -427,9 +427,11 @@ concurrency, parser choices, deployment, and verification.
 
 ## Shared job discovery
 
-`/dashboard/discover` lets onboarded users watch supported ATS companies and
-organize personalized results. Public jobs are shared; preferences, matches and
-actions are private. See [discovery handoff](docs/DISCOVERY_HANDOFF.md) and
+`/dashboard/discover` gives onboarded users immediate deterministic matches from
+the fresh shared catalog, without company watches. Follow a company for ongoing
+monitoring; AI adds detail asynchronously to top candidates. Public jobs are shared;
+preferences, matches and actions are private. See [fast-path handoff](docs/DISCOVERY_FAST_PATH_HANDOFF.md),
+[discovery handoff](docs/DISCOVERY_HANDOFF.md) and
 [provider/upstream research](docs/DISCOVERY_RESEARCH.md) for bounds, ownership,
 versioning, costs and proof limitations.
 
@@ -442,10 +444,18 @@ neon deploy --env .env.local --no-env-pull
 JOBSYNC_DISCOVERY_LIVE_BRANCH=lively-shape-65452824/br-tiny-tree-b44fo1lv pnpm discovery:live-proof
 ```
 
-`discoveryworker` runs every five minutes from Neon. It refreshes only watched
-public boards at six-hour intervals and bounds private GPT-6 Luna matching to
-three calls per user per UTC day, with durable allowance/cost accounting.
-The OpenRouter key stays in the Function environment and is not needed by Vercel.
+`discoveryworker` receives authenticated server-side wakes after committed Find
+jobs and watch actions. Neon recovery every five minutes repairs missed wakes.
+It refreshes an explicit twelve-board warm catalog and eligible users' watched
+boards at six-hour intervals. Only snapshots checked within 24 hours participate
+in new results. Matching reads a title-prefiltered shared page of at most 3,000
+postings, writes at most 50 private deterministic candidates, and admits at most
+three GPT-6 Luna calls/user/UTC day with existing trial/Plus accounting.
+
+Configure `DISCOVERY_WORKER_URL` and the same server-only `DISCOVERY_WAKE_SECRET`
+in Vercel and the discovery Function. Bootstrap the reviewed warm catalog with
+`JOBSYNC_WARM_CATALOG=lively-shape-65452824/br-tiny-tree-b44fo1lv node --import tsx scripts/warm-catalog.ts`.
+The OpenRouter key stays server-side; no AI Gateway is used.
 
 ## Private application tracker
 

@@ -51,11 +51,6 @@ import {
 } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
-const providerNames = {
-  greenhouse: "Greenhouse",
-  lever: "Lever",
-  ashby: "Ashby",
-}
 async function request(
   query: string,
   filter: string,
@@ -84,18 +79,26 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
   const [busy, setBusy] = useState(false)
   const [preferences, setPreferences] = useState(false)
   const companySearch = useRef<HTMLInputElement>(null)
+  const generation = useRef(0)
   useEffect(() => {
-    if (!data.watches.length) return
+    if (!data.enhancing && !data.monitoring) return
     const controller = new AbortController()
+    const startedAt = Date.now()
+    let lastPollAt = 0
     const timer = setInterval(() => {
       if (document.visibilityState !== "visible" || busy) return
+      const now = Date.now()
+      if (now - startedAt > 90_000 && now - lastPollAt < 15_000) return
+      lastPollAt = now
+      const current = generation.current
       request(
         query,
         filter,
         AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)])
       )
         .then((next) => {
-          if (!controller.signal.aborted) setData(next)
+          if (!controller.signal.aborted && current === generation.current)
+            setData(next)
         })
         .catch(() => {
           if (!controller.signal.aborted)
@@ -103,21 +106,25 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               "Results could not refresh. Check your connection or press Refresh."
             )
         })
-    }, 15_000)
+    }, 3_000)
     return () => {
       clearInterval(timer)
       controller.abort()
     }
-  }, [data.watches.length, query, filter, busy])
+  }, [data.enhancing, data.monitoring, query, filter, busy])
   useEffect(() => {
     const controller = new AbortController()
+    const current = ++generation.current
     const timer = setTimeout(() => {
       request(
         query,
         filter,
         AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)])
       )
-        .then(setData)
+        .then((next) => {
+          if (!controller.signal.aborted && current === generation.current)
+            setData(next)
+        })
         .catch((e) => {
           if (!controller.signal.aborted) setError(e.message)
         })
@@ -128,6 +135,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
     }
   }, [query, filter])
   async function track(postingId: string, matchId: string) {
+    generation.current++
     setBusy(true)
     setError("")
     try {
@@ -147,6 +155,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
     }
   }
   async function mutate(input: unknown) {
+    generation.current++
     setBusy(true)
     setError("")
     try {
@@ -154,7 +163,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(input),
-        signal: AbortSignal.timeout(10_000),
+        signal: AbortSignal.timeout(30_000),
       })
       if (!response.ok) {
         const result = await response.json()
@@ -170,7 +179,11 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                   : "Could not save your change. Please try again."
         )
       }
-      setData(await request(query, filter))
+      const result = await response.json()
+      if (result.data) {
+        setFilter("new")
+        setData(result.data)
+      } else setData(await request(query, filter))
       return true
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Please try again.")
@@ -197,16 +210,10 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
         </FieldGroup>
         <Button
           disabled={busy || !data.ready}
-          onClick={() => {
-            companySearch.current?.focus()
-            companySearch.current?.scrollIntoView({
-              behavior: "instant",
-              block: "center",
-            })
-          }}
+          onClick={() => mutate({ action: "find" })}
         >
-          <Search />{" "}
-          {data.watches.length ? "Add companies" : "Find jobs for me"}
+          <Search className={busy ? "animate-pulse" : ""} />{" "}
+          {data.counts.new ? "Refresh matches" : "Find jobs"}
         </Button>
       </FieldGroup>
       {error && (
@@ -245,7 +252,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                 variant="neutral"
                 onClick={() => setPreferences(true)}
               >
-                <SlidersHorizontal /> Refine
+                <SlidersHorizontal /> Refine search
               </Button>
             </ItemActions>
           </Item>
@@ -261,24 +268,11 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                 </TabsTrigger>
               </TabsList>
             </Tabs>
-            <Button
-              size="sm"
-              variant="neutral"
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true)
-                try {
-                  setData(await request(query, filter))
-                  setError("")
-                } catch (e) {
-                  setError((e as Error).message)
-                } finally {
-                  setBusy(false)
-                }
-              }}
-            >
-              <RefreshCw className={busy ? "animate-spin" : ""} /> Refresh
-            </Button>
+            {data.enhancing && (
+              <CardDescription role="status" className="text-xs">
+                Adding a closer look to top matches…
+              </CardDescription>
+            )}
           </FieldGroup>
           {data.jobs.length === 0 ? (
             <Empty className="min-h-80 border-border bg-secondary-background">
@@ -287,20 +281,18 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                   <Search />
                 </EmptyMedia>
                 <EmptyTitle className="text-xl">
-                  {data.watches.length === 0
-                    ? "Start with a company you like"
-                    : filter === "saved"
-                      ? "Keep the openings worth a closer look"
-                      : filter === "dismissed"
-                        ? "Nothing dismissed yet"
-                        : "Your search is taking shape"}
+                  {filter === "saved"
+                    ? "Keep the openings worth a closer look"
+                    : filter === "dismissed"
+                      ? "Nothing dismissed yet"
+                      : busy
+                        ? "Finding a useful place to start"
+                        : "No close matches yet"}
                 </EmptyTitle>
                 <EmptyDescription>
-                  {data.watches.length === 0
-                    ? "Choose a company from the list. We’ll look for roles using your confirmed experience and starting role."
-                    : filter === "new"
-                      ? "We’re watching your companies for relevant openings. Results update here automatically. Broaden your role or location if your search stays quiet."
-                      : "Use the actions on a job to organize your results."}
+                  {filter === "new"
+                    ? "We searched current openings using your confirmed resume and target role. Try a broader title or location in Refine search. We keep checking companies you follow in the background."
+                    : "Use the actions on a job to organize your results."}
                 </EmptyDescription>
               </EmptyHeader>
             </Empty>
@@ -312,9 +304,26 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                     <CardDescription className="font-medium text-foreground">
                       {job.company}
                     </CardDescription>
-                    <Badge variant="neutral" className="text-xs">
-                      {providerNames[job.provider]}
-                    </Badge>
+                    <Button
+                      size="sm"
+                      variant="neutral"
+                      disabled={
+                        busy ||
+                        job.watched ||
+                        data.watches.length >= data.watchLimit
+                      }
+                      aria-label={`${job.watched ? "Watching" : "Watch"} ${job.company}`}
+                      onClick={() =>
+                        mutate({
+                          action: "watch",
+                          boardId: job.boardId,
+                          watching: true,
+                        })
+                      }
+                    >
+                      {job.watched ? <Check /> : <Plus />}{" "}
+                      {job.watched ? "Watching company" : "Watch this company"}
+                    </Button>
                   </FieldGroup>
                   <CardTitle
                     role="heading"
@@ -333,27 +342,33 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <Badge variant="neutral">Matches your search</Badge>
+                  <Badge variant="neutral">
+                    {job.stale
+                      ? "From an earlier search"
+                      : "Matches your search"}
+                  </Badge>
                   <CardDescription className="text-sm leading-relaxed">
                     {job.reasons.join(". ")}.
                   </CardDescription>
-                  {job.aiScore !== null && (
-                    <Alert className="review-guidance">
-                      <CardTitle className="text-sm">
-                        AI match · {job.aiScore}/100 · {job.recommendation}
-                      </CardTitle>
-                      <AlertDescription className="mt-2">
-                        {job.rationale}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  {job.aiScore === null && (
-                    <CardDescription className="text-xs text-foreground">
-                      {job.stale
-                        ? "Your resume, preferences or this posting changed. The previous AI score is hidden while relevance is recomputed."
-                        : "Selected using your target titles and resume keywords. No completed AI analysis yet."}
-                    </CardDescription>
-                  )}
+                  <Alert
+                    className="review-guidance min-h-32"
+                    aria-live="polite"
+                  >
+                    <CardTitle className="text-sm">
+                      {job.aiScore !== null
+                        ? `AI match · ${job.aiScore}/100 · ${job.recommendation}`
+                        : job.stale
+                          ? "Search updated"
+                          : "Why this is worth a look"}
+                    </CardTitle>
+                    <AlertDescription className="mt-2 line-clamp-3">
+                      {job.aiScore !== null
+                        ? job.rationale
+                        : job.stale
+                          ? "Your resume, preferences or this posting changed. Refresh matches to review current relevance. Your saved job stays here."
+                          : "Selected using your role and skills. A closer AI review may be added to top matches; you can explore this opening now."}
+                    </AlertDescription>
+                  </Alert>
                 </CardContent>
                 <CardFooter className="flex-wrap justify-between gap-3 border-t border-border pt-4">
                   <Button
@@ -431,24 +446,19 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
             ))
           )}
         </FieldGroup>
-        <Card
-          className={`lg:sticky lg:top-6 ${!data.watches.length ? "order-first lg:order-last" : ""}`}
-        >
+        <Card className="lg:sticky lg:top-6">
           <CardHeader>
             <CardTitle
               role="heading"
               aria-level={2}
               className="flex items-center gap-2 text-lg"
             >
-              <Building2 className="size-5" />{" "}
-              {data.watches.length
-                ? "Your companies"
-                : "Where would you like to work?"}
+              <Building2 className="size-5" /> Companies you follow
             </CardTitle>
             <CardDescription>
               {data.watchLimit > 0
-                ? `Choose up to ${data.watchLimit} companies. We’ll keep an eye on their openings.`
-                : "Upgrade to watch public company boards."}
+                ? `Follow up to ${data.watchLimit} companies for future openings. Your search works without following any.`
+                : "Open Account & billing to follow companies."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -465,10 +475,10 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                       </ItemTitle>
                       <ItemDescription className="text-xs">
                         {company.errorCode
-                          ? "Board unavailable · we’ll retry"
+                          ? "Temporarily unavailable · we’ll retry"
                           : company.lastSuccessAt
                             ? `Checked ${age(company.lastSuccessAt)}`
-                            : "Awaiting first background check"}
+                            : "Checking openings in the background…"}
                       </ItemDescription>
                     </ItemContent>
                     <Button
@@ -512,7 +522,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                       {company.company}
                     </ItemTitle>
                     <ItemDescription className="text-xs">
-                      {providerNames[company.provider]}
+                      Monitor future openings
                     </ItemDescription>
                   </ItemContent>
                   <Button
@@ -540,8 +550,8 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
             </ItemGroup>
             <CardDescription className="text-xs">
               {query.trim()
-                ? "Supported company career boards on Greenhouse, Lever, and Ashby."
-                : "Search for a company you’d like to work at. Choose Watch to find relevant openings and keep checking for new ones."}
+                ? "Follow an employer to keep checking its public openings."
+                : "Have a company in mind? Following it adds ongoing monitoring to your search."}
             </CardDescription>
           </CardContent>
         </Card>

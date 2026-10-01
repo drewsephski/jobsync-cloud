@@ -23,7 +23,7 @@ const questions = [
   ],
   [
     "Which job boards does it search?",
-    "JobSync watches supported company career boards on Greenhouse, Lever, and Ashby. Choose companies from the directory in Discover. You can also track a job from anywhere manually.",
+    "Your search starts with a shared catalog of current company openings. Follow employers for future updates, or track a job from anywhere manually.",
   ],
   [
     "What happens to my resume?",
@@ -95,7 +95,7 @@ export default function Landing() {
               ],
               [
                 "Discover relevant jobs",
-                "Choose companies you like. See openings that connect to your background, with clear reasons to take a closer look.",
+                "Find jobs using your resume and target role. Save a promising opening or follow its company for future updates.",
               ],
               [
                 "Keep your next step close",

@@ -330,6 +330,7 @@ model AtsBoard {
   watches CompanyWatch[]
   @@unique([provider, slug])
   @@index([enabled, nextFetchAt])
+  @@index([enabled, lastSuccessAt])
 }
 model JobPosting {
   id String @id @default(uuid()) @db.Uuid

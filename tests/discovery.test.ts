@@ -43,6 +43,44 @@ const resumeData = (skill: string, privateValue: string) => ({
   education: [],
   credentials: [],
 })
+
+test("deterministic relevance rejects neighboring occupations with shared words", () => {
+  const resume = resumeData("TypeScript", "private@example.test")
+  const cases = [
+    ["Product Manager", "Product Designer"],
+    ["Software Sales", "Software Engineer"],
+    ["Data Engineer", "Data Scientist"],
+  ] as const
+  for (const [targetTitle, postingTitle] of cases) {
+    assert.equal(
+      prerank(
+        {
+          title: postingTitle,
+          location: "Seattle, WA",
+          remote: false,
+          description: "Build TypeScript systems.",
+        },
+        [
+          {
+            id: randomUUID(),
+            ownerUserId: "relevance-test",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            targetTitle,
+            location: "Seattle",
+            remotePreferred: false,
+            keywords: [],
+            minimumCompensationUsd: null,
+            active: true,
+          },
+        ],
+        resume
+      ).eligible,
+      false,
+      `${postingTitle} should not match a ${targetTitle} target`
+    )
+  }
+})
 function job(
   externalId: string,
   title: string,
@@ -164,6 +202,7 @@ test("real Postgres: shared ingestion, private matching, stale inputs, idempoten
   let companyId: string | null = null
   let boardId: string | null = null
   let scanBoardId: string | null = null
+  let cursorBoardId: string | null = null
   try {
     const company = await db.company.create({
       data: { name: "Discovery Test Company", slug: companySlug },
@@ -709,7 +748,12 @@ test("real Postgres: shared ingestion, private matching, stale inputs, idempoten
     )
 
     const scanBoard = await db.atsBoard.create({
-      data: { companyId, provider: "greenhouse", slug: `scan-${suffix}` },
+      data: {
+        companyId,
+        provider: "greenhouse",
+        slug: `scan-${suffix}`,
+        lastSuccessAt: new Date(),
+      },
     })
     scanBoardId = scanBoard.id
     await db.companyWatch.create({
@@ -752,56 +796,126 @@ test("real Postgres: shared ingestion, private matching, stale inputs, idempoten
       where: { ownerUserId: { in: owners } },
     }) // Advance isolated scan admission for this lifecycle phase.
     const firstScan = await worker.plan(owners[0])
-    assert.equal(firstScan.considered, 3000)
-    assert.equal(
-      firstScan.eligible,
-      0,
-      "the initial bounded page contains only unrelated jobs"
+    assert.ok(
+      firstScan.considered < 3000,
+      "title prefilter skips thousands of unrelated postings before the bounded scan"
     )
-    const firstCursor = await db.userProfile.findUniqueOrThrow({
-      where: { id: owners[0] },
-    })
-    assert.equal(firstCursor.discoveryCursor, fillers[2999].id)
-    const firstInputKey = firstCursor.discoveryInputKey
-
-    // Changing watched boards resets the cursor so the new input set is scanned from its start.
-    await discovery.mutate(authA, {
-      action: "watch",
-      boardId: fixtureBoardId,
-      watching: false,
-    })
-    await db.discoveryAllowance.deleteMany({
-      where: { ownerUserId: { in: owners } },
-    }) // Advance isolated scan admission for this lifecycle phase.
-    const restartedScan = await worker.plan(owners[0])
-    assert.equal(restartedScan.considered, 3000)
-    const restartedCursor = await db.userProfile.findUniqueOrThrow({
-      where: { id: owners[0] },
-    })
-    assert.equal(restartedCursor.discoveryCursor, fillers[2999].id)
-    assert.notEqual(restartedCursor.discoveryInputKey, firstInputKey)
-    await db.discoveryAllowance.deleteMany({
-      where: { ownerUserId: { in: owners } },
-    }) // Advance isolated scan admission for this lifecycle phase.
-    const secondScan = await worker.plan(owners[0])
-    assert.equal(
-      secondScan.considered,
-      2,
-      "the next call advances to the remainder of the catalog"
-    )
-    assert.equal(secondScan.eligible, 1)
-    assert.equal(
-      (await db.userProfile.findUniqueOrThrow({ where: { id: owners[0] } }))
-        .discoveryCursor,
-      null
-    )
+    assert.ok(firstScan.eligible >= 1)
     const lateMatch = await db.jobMatch.findFirstOrThrow({
       where: { ownerUserId: owners[0], jobPostingId: latePostingId },
     })
     assert.equal(
       lateMatch.jobPostingId,
       latePostingId,
-      "a relevant posting beyond the first 3000 is reached"
+      "the useful late posting is found in the first bounded scan"
+    )
+
+    // More than one page of title candidates still uses a durable rotating
+    // cursor. These 3,001 postings pass the title prefilter but fail the user's
+    // Seattle location rule, leaving the late Seattle posting on the next page.
+    const cursorBoard = await db.atsBoard.create({
+      data: {
+        companyId,
+        provider: "greenhouse",
+        slug: `cursor-${suffix}`,
+        lastSuccessAt: new Date(),
+      },
+    })
+    cursorBoardId = cursorBoard.id
+    const cursorFillers = Array.from({ length: 3001 }, (_, index) => {
+      const sequence = (index + 1).toString(16).padStart(12, "0")
+      return {
+        id: `00000001-0000-4000-8000-${sequence}`,
+        boardId: cursorBoard.id,
+        externalId: `cursor-${index + 1}`,
+        title: "Software Engineer",
+        location: "Denver, CO",
+        remote: false,
+        description: "Build TypeScript services.",
+        originalUrl: "https://boards.greenhouse.io/example/jobs/cursor",
+        contentHash: sha(`cursor-${index + 1}`),
+      }
+    })
+    for (let offset = 0; offset < cursorFillers.length; offset += 500)
+      await db.jobPosting.createMany({
+        data: cursorFillers.slice(offset, offset + 500),
+      })
+    const cursorLateId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
+    await db.jobPosting.create({
+      data: {
+        id: cursorLateId,
+        boardId: cursorBoard.id,
+        externalId: "cursor-late-relevant",
+        title: "Senior Software Engineer",
+        location: "Seattle, WA",
+        remote: false,
+        description: "Build TypeScript services.",
+        originalUrl: "https://boards.greenhouse.io/example/jobs/cursor-late",
+        contentHash: sha("cursor-late-relevant"),
+      },
+    })
+    await db.discoveryAllowance.deleteMany({
+      where: { ownerUserId: { in: owners } },
+    })
+    const cursorFirstScan = await worker.plan(owners[0])
+    assert.equal(cursorFirstScan.considered, 3000)
+    assert.equal(cursorFirstScan.eligible, 0)
+    const firstCursor = await db.userProfile.findUniqueOrThrow({
+      where: { id: owners[0] },
+    })
+    assert.equal(firstCursor.discoveryCursor, cursorFillers[2999].id)
+    const firstInputKey = firstCursor.discoveryInputKey
+
+    // A shared board refresh while a catalog sweep is in progress must not
+    // reset it to page one. Finish the original input snapshot first.
+    await db.atsBoard.update({
+      where: { id: cursorBoard.id },
+      data: { lastSuccessAt: new Date(Date.now() + 1000) },
+    })
+
+    // Watch changes do not narrow or reset shared-catalog coverage.
+    await discovery.mutate(authA, {
+      action: "watch",
+      boardId: fixtureBoardId,
+      watching: false,
+    })
+    const originalTail = await worker.plan(owners[0], { incremental: true })
+    assert.ok(originalTail.considered < 10)
+    assert.ok(originalTail.eligible >= 1)
+    const restartedCursor = await db.userProfile.findUniqueOrThrow({
+      where: { id: owners[0] },
+    })
+    assert.equal(restartedCursor.discoveryInputKey, firstInputKey)
+    assert.equal(restartedCursor.discoveryCursor, null)
+
+    // Only after the old cursor reaches its tail may an incremental sweep
+    // capture the refreshed shared-catalog key and rotate through page one.
+    const refreshedFirstPage = await worker.plan(owners[0], {
+      incremental: true,
+    })
+    assert.equal(refreshedFirstPage.considered, 3000)
+    const refreshedCursor = await db.userProfile.findUniqueOrThrow({
+      where: { id: owners[0] },
+    })
+    assert.notEqual(refreshedCursor.discoveryInputKey, firstInputKey)
+    assert.equal(refreshedCursor.discoveryCursor, cursorFillers[2999].id)
+    const refreshedTail = await worker.plan(owners[0], { incremental: true })
+    assert.ok(refreshedTail.considered < 10)
+    const completedRefresh = await db.userProfile.findUniqueOrThrow({
+      where: { id: owners[0] },
+    })
+    assert.equal(
+      completedRefresh.discoveryInputKey,
+      refreshedCursor.discoveryInputKey
+    )
+    assert.equal(completedRefresh.discoveryCursor, null)
+    const cursorLateMatch = await db.jobMatch.findFirstOrThrow({
+      where: { ownerUserId: owners[0], jobPostingId: cursorLateId },
+    })
+    assert.equal(
+      cursorLateMatch.jobPostingId,
+      cursorLateId,
+      "the rotating scan eventually reaches a useful posting after 3,000 title candidates"
     )
     await assert.rejects(
       db.jobMatch.update({
@@ -939,6 +1053,391 @@ test("real Postgres: shared ingestion, private matching, stale inputs, idempoten
     if (scanBoardId) {
       await db.jobPosting.deleteMany({ where: { boardId: scanBoardId } })
       await db.atsBoard.delete({ where: { id: scanBoardId } })
+    }
+    if (cursorBoardId) {
+      await db.jobPosting.deleteMany({ where: { boardId: cursorBoardId } })
+      await db.atsBoard.delete({ where: { id: cursorBoardId } })
+    }
+    if (companyId) await db.company.delete({ where: { id: companyId } })
+  }
+})
+
+test("real Postgres: first-use discovery works without watches and concurrent scans stay private", async () => {
+  const suffix = randomUUID()
+  const owners = [`first-use-a-${suffix}`, `first-use-b-${suffix}`]
+  const companySlug = `first-use-${suffix}`
+  let companyId: string | null = null
+  let boardId: string | null = null
+  let staleBoardId: string | null = null
+  const resumeIds: string[] = []
+  const fanoutOwners = Array.from(
+    { length: 10 },
+    (_, index) => `a-wake-${suffix}-${index.toString().padStart(2, "0")}`
+  )
+  await db.userProfile.createMany({
+    data: owners.map((id) => ({
+      id,
+      ...trialFields(),
+      onboardingCompletedAt: new Date(),
+      preferenceRevision: 1,
+    })),
+  })
+  try {
+    const company = await db.company.create({
+      data: { name: "First Use Shared Catalog", slug: companySlug },
+    })
+    companyId = company.id
+    const board = await db.atsBoard.create({
+      data: {
+        companyId,
+        provider: "greenhouse",
+        slug: "figma",
+        nextFetchAt: new Date(Date.now() - 1000),
+      },
+    })
+    boardId = board.id
+    const staleBoard = await db.atsBoard.create({
+      data: {
+        companyId,
+        provider: "greenhouse",
+        slug: `stale-first-use-${suffix}`,
+        lastSuccessAt: new Date(Date.now() - 25 * 60 * 60_000),
+      },
+    })
+    staleBoardId = staleBoard.id
+    await db.jobPosting.create({
+      data: {
+        ...job(
+          "stale-se-1",
+          "Senior Software Engineer",
+          "Seattle, WA",
+          "Build TypeScript services."
+        ),
+        boardId: staleBoard.id,
+      },
+    })
+
+    const postings = [
+      ...Array.from({ length: 5 }, (_, index) =>
+        job(
+          `se-${index + 1}`,
+          "Senior Software Engineer",
+          "Seattle, WA",
+          "Build TypeScript services for distributed systems."
+        )
+      ),
+      ...Array.from({ length: 2 }, (_, index) =>
+        job(
+          `ds-${index + 1}`,
+          "Senior Data Scientist",
+          "Seattle, WA",
+          "Analyze Python datasets and machine learning models."
+        )
+      ),
+    ]
+    for (const [index, ownerUserId] of owners.entries()) {
+      const skill = index === 0 ? "TypeScript" : "Python"
+      const resume = await db.resume.create({
+        data: { ownerUserId, title: "Confirmed first-use resume" },
+      })
+      resumeIds.push(resume.id)
+      const version = await db.resumeVersion.create({
+        data: {
+          ownerUserId,
+          resumeId: resume.id,
+          version: 1,
+          source: "manual",
+          status: "ready",
+          data: resumeData(skill, `${ownerUserId}@example.test`),
+        },
+      })
+      await db.resume.update({
+        where: { id: resume.id },
+        data: { confirmedVersionId: version.id, confirmedAt: new Date() },
+      })
+      await db.targetPreference.create({
+        data: {
+          ownerUserId,
+          targetTitle: index === 0 ? "Software Engineer" : "Data Scientist",
+          location: "Seattle",
+          remotePreferred: false,
+          keywords: [skill],
+        },
+      })
+    }
+
+    const matcher: Matcher = async () => {
+      throw new Error("deterministic planning must not call AI")
+    }
+    let fetchCount = 0
+    const worker = createDiscoveryWorker(db, matcher, async () => {
+      fetchCount++
+      return postings
+    })
+    assert.equal(
+      await db.companyWatch.count({ where: { ownerUserId: { in: owners } } }),
+      0,
+      "new users have no company watches"
+    )
+    const [warmRunA, warmRunB] = await Promise.all([
+      worker.ensureBoard(board.id),
+      worker.ensureBoard(board.id),
+    ])
+    assert.ok(warmRunA && warmRunB)
+    assert.equal(
+      warmRunA.id,
+      warmRunB.id,
+      "concurrent no-watch refreshes converge on one shared warm-board run"
+    )
+    assert.equal(await worker.ingest(warmRunA.id), "succeeded")
+    assert.equal(fetchCount, 1)
+    assert.equal(
+      await db.jobPosting.count({ where: { boardId: board.id } }),
+      7,
+      "a warm public board is fetched once without a watcher"
+    )
+
+    const [plansA, planB] = await Promise.all([
+      Promise.all(Array.from({ length: 5 }, () => worker.plan(owners[0]))),
+      worker.plan(owners[1]),
+    ])
+    assert.equal(
+      plansA.reduce((total, plan) => total + plan.queued, 0),
+      MAX_AI_PER_USER_DAY,
+      "concurrent Find jobs requests enqueue only the private daily AI cap"
+    )
+    assert.equal(
+      plansA.reduce((total, plan) => total + plan.surfaced, 0),
+      5,
+      "one concurrent scan materializes each deterministic candidate once"
+    )
+    assert.equal(planB.surfaced, 2)
+    assert.equal(planB.queued, 2)
+    assert.equal(
+      await db.jobMatch.count({
+        where: { ownerUserId: owners[0], posting: { boardId: staleBoard.id } },
+      }),
+      0,
+      "postings outside the bounded freshness window do not enter first-use matches"
+    )
+    assert.equal(
+      await db.jobPosting.count({ where: { boardId: board.id } }),
+      7,
+      "both users share the same seven public postings"
+    )
+    assert.equal(
+      await db.jobMatch.count({
+        where: {
+          ownerUserId: owners[0],
+          posting: { title: { contains: "Software Engineer" } },
+        },
+      }),
+      5
+    )
+    assert.equal(
+      await db.jobMatch.count({
+        where: {
+          ownerUserId: owners[1],
+          posting: { title: { contains: "Data Scientist" } },
+        },
+      }),
+      2
+    )
+    assert.equal(
+      await db.jobMatch.count({
+        where: {
+          ownerUserId: owners[0],
+          posting: { title: { contains: "Data Scientist" } },
+        },
+      }),
+      0,
+      "matching stays personalized to each confirmed resume and target"
+    )
+    assert.equal(
+      await db.processingRun.count({
+        where: { ownerUserId: owners[0], kind: MATCH_KIND },
+      }),
+      MAX_AI_PER_USER_DAY
+    )
+
+    const uncertainRun = await db.processingRun.findFirstOrThrow({
+      where: { ownerUserId: owners[0], kind: MATCH_KIND, status: "pending" },
+    })
+    let uncertainCalls = 0
+    const uncertainWorker = createDiscoveryWorker(db, async () => {
+      uncertainCalls++
+      throw new Error("connection lost after provider submission")
+    })
+    assert.equal(await uncertainWorker.processMatch(uncertainRun.id), "failed")
+    assert.equal(
+      await uncertainWorker.processMatch(uncertainRun.id),
+      "not_claimed"
+    )
+    const uncertainResult = await db.processingRun.findUniqueOrThrow({
+      where: { id: uncertainRun.id },
+    })
+    assert.equal(uncertainResult.errorCode, "provider_outcome_unknown")
+    assert.equal(
+      uncertainCalls,
+      1,
+      "an uncertain paid attempt is never retried"
+    )
+
+    const discovery = createDiscoveryService(db)
+    const authA = { id: owners[0], name: null, email: null } as CurrentAuthUser
+    const authB = { id: owners[1], name: null, email: null } as CurrentAuthUser
+    const savedPosting = await db.jobPosting.findFirstOrThrow({
+      where: { boardId: board.id, externalId: "se-1" },
+    })
+    const dismissedPosting = await db.jobPosting.findFirstOrThrow({
+      where: { boardId: board.id, externalId: "ds-1" },
+    })
+    await discovery.mutate(authA, {
+      action: "state",
+      postingId: savedPosting.id,
+      state: "saved",
+    })
+    await discovery.mutate(authB, {
+      action: "state",
+      postingId: dismissedPosting.id,
+      state: "dismissed",
+    })
+    const targetA = await db.targetPreference.findFirstOrThrow({
+      where: { ownerUserId: owners[0] },
+    })
+    const preferenceResult = await discovery.mutate(authA, {
+      action: "preferences",
+      expectedRevision: 1,
+      targets: [
+        {
+          targetTitle: targetA.targetTitle,
+          location: targetA.location,
+          remotePreferred: targetA.remotePreferred,
+          minimumCompensationUsd: null,
+          keywords: ["TypeScript", "distributed"],
+        },
+      ],
+    })
+    assert.ok("funnel" in preferenceResult)
+    assert.ok(preferenceResult.funnel)
+    assert.equal(preferenceResult.funnel.surfaced, 5)
+    assert.equal(
+      (await db.userProfile.findUniqueOrThrow({ where: { id: owners[0] } }))
+        .preferenceRevision,
+      2
+    )
+    assert.equal(
+      await db.targetPreference.count({
+        where: { ownerUserId: owners[0], active: true },
+      }),
+      1
+    )
+    const saved = await discovery.read(authA, "", "saved")
+    const dismissed = await discovery.read(authB, "", "dismissed")
+    assert.equal(
+      saved.jobs.find((candidate) => candidate.id === savedPosting.id)?.state,
+      "saved",
+      "saved state survives input-version recomputation without a watch"
+    )
+    assert.equal(
+      dismissed.jobs.find((candidate) => candidate.id === dismissedPosting.id)
+        ?.state,
+      "dismissed",
+      "dismissed state survives recomputation and remains tenant-private"
+    )
+    assert.equal(
+      await db.companyWatch.count({ where: { ownerUserId: { in: owners } } }),
+      0,
+      "finding and recomputing jobs does not create company watches"
+    )
+
+    // The initiating watcher is planned ahead of the bounded fan-out. These
+    // ten eligible watchers sort before the caller and would occupy the old
+    // LIMIT 10 prefix, even though they have no confirmed resume/preferences.
+    await db.userProfile.createMany({
+      data: fanoutOwners.map((id) => ({
+        id,
+        ...trialFields(),
+        onboardingCompletedAt: new Date(),
+      })),
+    })
+    await db.companyWatch.createMany({
+      data: [...fanoutOwners, owners[0]].map((ownerUserId) => ({
+        ownerUserId,
+        boardId: board.id,
+      })),
+    })
+    const wakeOnlyJob = job(
+      "wake-priority",
+      "Senior Software Engineer",
+      "Seattle, WA",
+      "Build TypeScript services for a growing team."
+    )
+    postings.push(wakeOnlyJob)
+    await db.atsBoard.update({
+      where: { id: board.id },
+      data: { nextFetchAt: new Date(Date.now() - 1000) },
+    })
+    const wakeResult = await worker.wake({
+      ownerUserId: owners[0],
+      boardId: board.id,
+    })
+    assert.equal(wakeResult.ingested, "succeeded")
+    const wakePosting = await db.jobPosting.findFirstOrThrow({
+      where: { boardId: board.id, externalId: "wake-priority" },
+    })
+    assert.ok(
+      await db.jobMatch.findFirst({
+        where: { ownerUserId: owners[0], jobPostingId: wakePosting.id },
+      }),
+      "the initiating watcher receives deterministic results despite ten earlier fan-out watchers"
+    )
+    assert.equal(
+      await db.jobMatch.count({
+        where: {
+          ownerUserId: { in: fanoutOwners },
+          jobPostingId: wakePosting.id,
+        },
+      }),
+      0,
+      "watcher fan-out does not fabricate matches for users without confirmed inputs"
+    )
+  } finally {
+    await db.companyWatch.deleteMany({
+      where: { ownerUserId: { in: fanoutOwners } },
+    })
+    await db.userProfile.deleteMany({ where: { id: { in: fanoutOwners } } })
+    await db.aiUsage.deleteMany({ where: { ownerUserId: { in: owners } } })
+    await db.aiUsageReservation.deleteMany({
+      where: { ownerUserId: { in: owners } },
+    })
+    await db.jobMatch.deleteMany({ where: { ownerUserId: { in: owners } } })
+    await db.userJobState.deleteMany({ where: { ownerUserId: { in: owners } } })
+    await db.processingRun.deleteMany({
+      where: { ownerUserId: { in: owners } },
+    })
+    await db.discoveryAllowance.deleteMany({
+      where: { ownerUserId: { in: owners } },
+    })
+    await db.targetPreference.deleteMany({
+      where: { ownerUserId: { in: owners } },
+    })
+    await db.resume.updateMany({
+      where: { ownerUserId: { in: owners } },
+      data: { confirmedVersionId: null, confirmedAt: null },
+    })
+    await db.resumeVersion.deleteMany({
+      where: { ownerUserId: { in: owners } },
+    })
+    await db.resume.deleteMany({ where: { ownerUserId: { in: owners } } })
+    await db.userProfile.deleteMany({ where: { id: { in: owners } } })
+    if (boardId) {
+      await db.jobPosting.deleteMany({ where: { boardId } })
+      await db.atsBoard.delete({ where: { id: boardId } })
+    }
+    if (staleBoardId) {
+      await db.jobPosting.deleteMany({ where: { boardId: staleBoardId } })
+      await db.atsBoard.delete({ where: { id: staleBoardId } })
     }
     if (companyId) await db.company.delete({ where: { id: companyId } })
   }

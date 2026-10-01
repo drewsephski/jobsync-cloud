@@ -4,7 +4,7 @@ import type {
   TargetPreference,
 } from "../../generated/prisma/client"
 import type { ResumeContent } from "../onboarding/schema"
-export const ALGORITHM_VERSION = "discovery-lexical-v1:match-lean-v1"
+export const ALGORITHM_VERSION = "discovery-lexical-v2:match-lean-v1"
 export const MAX_AI_PER_USER_DAY = 3
 export const MAX_FEED_CANDIDATES = 50
 export const fingerprint = (value: unknown) =>
@@ -12,6 +12,7 @@ export const fingerprint = (value: unknown) =>
 const aliases: Record<string, string> = {
   developer: "engineer",
   engineering: "engineer",
+  design: "designer",
   frontend: "front end",
   backend: "back end",
   sr: "senior",
@@ -39,6 +40,28 @@ export function tokens(text: string) {
     .split(/\s+/)
     .flatMap((t) => (aliases[t] ?? t).split(" "))
     .filter((t) => t && !stop.has(t))
+}
+// Superset of the lexical ranker's title eligibility. Provider spellings must
+// not be lost before aliases/word boundaries are evaluated by prerank.
+export function titleSearchTerms(
+  targets: Pick<TargetPreference, "targetTitle">[]
+) {
+  const terms = new Set(targets.flatMap((t) => tokens(t.targetTitle)))
+  for (const [alias, expansion] of Object.entries(aliases))
+    if (expansion.split(" ").some((word) => terms.has(word))) terms.add(alias)
+  return [...terms].filter(
+    (t) =>
+      ![
+        "senior",
+        "junior",
+        "staff",
+        "principal",
+        "lead",
+        "manager",
+        "sr",
+        "jr",
+      ].includes(t)
+  )
 }
 const has = (haystack: string, needle: string) => {
   const words = tokens(haystack).join(" ")
@@ -81,6 +104,12 @@ export function prerank(
       continue
     const wanted = [...new Set(tokens(target.targetTitle))]
     const title = new Set(tokens(posting.title))
+    // Generic modifiers such as "product", "software" and "data" are not
+    // enough to substitute a different occupation, even with shared skills.
+    const occupation = wanted.filter((t) =>
+      ["engineer", "designer", "scientist"].includes(t)
+    )
+    if (occupation.length && !occupation.every((t) => title.has(t))) continue
     const hit = wanted.filter((t) => title.has(t))
     const substantive = hit.filter(
       (t) =>

@@ -1,5 +1,10 @@
 # Job discovery
 
+Current first-use behavior is documented in [the fast-path handoff](DISCOVERY_FAST_PATH_HANDOFF.md).
+It supersedes the watch-required planning, synchronous per-card writes, and cron-primary
+wake behavior below. This file preserves the original ingestion/provenance contract
+and earlier release evidence.
+
 ## Product and ownership
 
 `/dashboard/discover` is the first post-onboarding workflow: choose companies,

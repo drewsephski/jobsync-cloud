@@ -1,7 +1,4 @@
-import {
-  discoveryEligibleOwner,
-  readEntitlement,
-} from "../../billing/entitlements"
+import { discoveryEligibleOwner } from "../../billing/entitlements"
 import { randomUUID } from "node:crypto"
 import type {
   Prisma,
@@ -17,18 +14,15 @@ import {
 import { MATCH_AI_CONFIG } from "../../ai/config"
 import { matchSchema, type Matcher, type MatchResult } from "../../ai/matching"
 import { profileInputs } from "./inputs"
+import { createDiscoveryPlanner } from "./planner"
+import { warmBoardFilter, isWarmBoard, freshBoardFilter } from "./catalog"
 export { profileInputs } from "./inputs"
 import { fetchBoard } from "./providers"
-import {
-  ALGORITHM_VERSION,
-  fingerprint,
-  prerank,
-  MAX_AI_PER_USER_DAY,
-  MAX_FEED_CANDIDATES,
-} from "./relevance"
+import { ALGORITHM_VERSION } from "./relevance"
 export const INGEST_KIND = "board_ingest_v1"
 export const MATCH_KIND = "job_match_v1"
-export const FRESHNESS_MS = 6 * 60 * 60 * 1000
+import { FRESHNESS_MS } from "./catalog"
+export { FRESHNESS_MS } from "./catalog"
 export function createDiscoveryWorker(
   db: PrismaClient,
   matcher: Matcher,
@@ -50,11 +44,10 @@ export function createDiscoveryWorker(
           id: boardId,
           enabled: true,
           nextFetchAt: { lte: new Date() },
-          watches: {
-            some: {
-              owner: discoveryEligibleOwner(),
-            },
-          },
+          OR: [
+            warmBoardFilter(),
+            { watches: { some: { owner: discoveryEligibleOwner() } } },
+          ],
         },
       })
       if (!board) return null
@@ -93,9 +86,10 @@ export function createDiscoveryWorker(
       })
       if (
         !board.enabled ||
-        !(await db.companyWatch.findFirst({
-          where: { boardId: board.id, owner: discoveryEligibleOwner() },
-        }))
+        (!isWarmBoard(board) &&
+          !(await db.companyWatch.findFirst({
+            where: { boardId: board.id, owner: discoveryEligibleOwner() },
+          })))
       )
         return runs.finish(run, "canceled", null)
       const jobs = await fetcher(board)
@@ -181,160 +175,7 @@ export function createDiscoveryWorker(
       })
     }
   }
-  async function plan(ownerUserId: string) {
-    return db.$transaction(
-      async (tx) => {
-        const active = await tx.$queryRaw<
-          { id: string }[]
-        >`SELECT id FROM "UserProfile" WHERE id = ${ownerUserId} AND "deletionRequestedAt" IS NULL FOR NO KEY UPDATE`
-        if (!active.length) return { considered: 0, eligible: 0, queued: 0 }
-        const entitlement = await readEntitlement(tx, ownerUserId)
-        if (!entitlement.verified || !entitlement.limits)
-          return { considered: 0, eligible: 0, queued: 0 }
-        const periodStart = new Date(
-          new Date().toISOString().slice(0, 10) + "T00:00:00Z"
-        )
-        const allowance = await tx.discoveryAllowance.findUnique({
-          where: { ownerUserId_periodStart: { ownerUserId, periodStart } },
-        })
-        const latestScan = await tx.discoveryAllowance.findFirst({
-          where: { ownerUserId },
-          orderBy: { lastScannedAt: "desc" },
-        })
-        if (
-          (allowance?.scans ?? 0) >= entitlement.limits.dailyScans ||
-          (latestScan &&
-            Date.now() - latestScan.lastScannedAt.getTime() < 12 * 3600_000)
-        )
-          return { considered: 0, eligible: 0, queued: 0 }
-        const input = await profileInputs(tx, ownerUserId)
-        if (!input) return { considered: 0, eligible: 0, queued: 0 }
-        await tx.discoveryAllowance.upsert({
-          where: { ownerUserId_periodStart: { ownerUserId, periodStart } },
-          create: { ownerUserId, periodStart, scans: 1 },
-          update: { scans: { increment: 1 }, lastScannedAt: new Date() },
-        })
-        const watched = await tx.companyWatch.findMany({
-          where: { ownerUserId },
-          orderBy: { boardId: "asc" },
-          take: entitlement.limits.watches,
-        })
-        const scanKey = fingerprint([
-          input.version.id,
-          input.profile.preferenceRevision,
-          input.preferenceHash,
-          watched.map((w) => w.boardId),
-          ALGORITHM_VERSION,
-        ])
-        const cursor =
-          input.profile.discoveryInputKey === scanKey
-            ? input.profile.discoveryCursor
-            : null
-        const page = await tx.jobPosting.findMany({
-          where: {
-            open: true,
-            boardId: { in: watched.map((w) => w.boardId) },
-            ...(cursor ? { id: { gt: cursor } } : {}),
-            board: { enabled: true, watches: { some: { ownerUserId } } },
-          },
-          orderBy: { id: "asc" },
-          take: 3001,
-        })
-        const postings = page.slice(0, 3000)
-        await tx.userProfile.update({
-          where: { id: ownerUserId },
-          data: {
-            discoveryInputKey: scanKey,
-            discoveryCursor: page.length > 3000 ? postings.at(-1)!.id : null,
-          },
-        })
-        const ranked = postings
-          .map((posting) => ({
-            posting,
-            result: prerank(posting, input.targets, input.content),
-          }))
-          .filter((p) => p.result.eligible)
-          .sort(
-            (a, b) =>
-              b.result.score - a.result.score ||
-              a.posting.id.localeCompare(b.posting.id)
-          )
-        const [counts] = await tx.$queryRaw<
-          { count: bigint }[]
-        >`SELECT count(*) FROM "ProcessingRun" WHERE "ownerUserId" = ${ownerUserId} AND kind = ${MATCH_KIND} AND "createdAt" >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`
-        let remaining = Math.max(0, MAX_AI_PER_USER_DAY - Number(counts.count)),
-          queued = 0
-        for (const { posting, result } of ranked.slice(
-          0,
-          MAX_FEED_CANDIDATES
-        )) {
-          const inputKey = fingerprint([
-            ownerUserId,
-            input.version.id,
-            input.profile.preferenceRevision,
-            input.preferenceHash,
-            posting.id,
-            posting.contentVersion,
-            posting.contentHash,
-            ALGORITHM_VERSION,
-          ])
-          const match = await tx.jobMatch.upsert({
-            where: { inputKey },
-            create: {
-              ownerUserId,
-              resumeId: input.resume.id,
-              resumeVersionId: input.version.id,
-              preferenceRevision: input.profile.preferenceRevision,
-              preferenceHash: input.preferenceHash,
-              jobPostingId: posting.id,
-              postingVersion: posting.contentVersion,
-              postingHash: posting.contentHash,
-              algorithmVersion: ALGORITHM_VERSION,
-              inputKey,
-              relevance: result.score,
-              reasons: result.reasons,
-            },
-            update: {},
-          })
-          if (remaining && !match.aiAnalyzedAt) {
-            const state = await tx.userJobState.findUnique({
-              where: {
-                ownerUserId_jobPostingId: {
-                  ownerUserId,
-                  jobPostingId: posting.id,
-                },
-              },
-            })
-            if (state?.state === "dismissed") continue
-            const key = `user:${ownerUserId}:match:${inputKey}`
-            if (
-              !(await tx.processingRun.findUnique({
-                where: { idempotencyKey: key },
-              }))
-            ) {
-              await tx.processingRun.create({
-                data: {
-                  ownerUserId,
-                  kind: MATCH_KIND,
-                  resourceId: match.id,
-                  idempotencyKey: key,
-                },
-              })
-              remaining--
-              queued++
-            }
-          }
-        }
-        return {
-          considered: postings.length,
-          eligible: ranked.length,
-          surfaced: Math.min(ranked.length, MAX_FEED_CANDIDATES),
-          queued,
-        }
-      },
-      { timeout: 60_000 }
-    )
-  }
+  const plan = createDiscoveryPlanner(db)
   async function currentInputs(
     tx: Prisma.TransactionClient,
     run: ProcessingRun
@@ -357,14 +198,8 @@ export function createDiscoveryWorker(
       !match.posting.open ||
       !match.posting.board.enabled ||
       match.algorithmVersion !== ALGORITHM_VERSION ||
-      !(await tx.companyWatch.findUnique({
-        where: {
-          ownerUserId_boardId: {
-            ownerUserId: run.ownerUserId,
-            boardId: match.posting.boardId,
-          },
-        },
-      }))
+      !match.posting.board.lastSuccessAt ||
+      match.posting.board.lastSuccessAt < freshBoardFilter().lastSuccessAt.gte
     )
       return null
     return { match, input }
@@ -480,36 +315,108 @@ export function createDiscoveryWorker(
       where: {
         enabled: true,
         nextFetchAt: { lte: new Date() },
-        watches: { some: {} },
+        OR: [
+          warmBoardFilter(),
+          { watches: { some: { owner: discoveryEligibleOwner() } } },
+        ],
       },
       orderBy: [{ nextFetchAt: "asc" }, { id: "asc" }],
       take: 3,
     })
-    for (const board of due) await ensureBoard(board.id)
-    let ingested = 0
-    for (let n = 0; n < 3; n++) {
-      if ((await ingest()) === "not_claimed") break
-      ingested++
-    }
+    await Promise.all(due.map((board) => ensureBoard(board.id)))
+    const ingestion = await Promise.all([ingest(), ingest()])
+    if (ingestion.some((r) => r !== "not_claimed"))
+      ingestion.push(await ingest())
+    const ingested = ingestion.filter((r) => r !== "not_claimed").length
     // Round-robin profile planning via last completed planning run. Database
     // history provides fairness across invocations without a volatile cursor.
     const owners = await db.$queryRaw<
       { id: string }[]
-    >`SELECT u.id FROM "UserProfile" u WHERE u."deletionRequestedAt" IS NULL AND u."onboardingCompletedAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "CompanyWatch" w WHERE w."ownerUserId" = u.id)
+    >`SELECT u.id FROM "UserProfile" u WHERE u."deletionRequestedAt" IS NULL AND u."onboardingCompletedAt" IS NOT NULL
       ORDER BY (SELECT max(r."createdAt") FROM "ProcessingRun" r WHERE r."ownerUserId" = u.id AND kind = 'discovery_plan_v1') ASC NULLS FIRST, u.id LIMIT 10`
     const funnels = []
-    for (const owner of owners) {
-      funnels.push(await plan(owner.id))
-      await db.$executeRaw`INSERT INTO "ProcessingRun" (id,"ownerUserId",kind,"resourceId","idempotencyKey",status,"completedAt","updatedAt")
+    for (let offset = 0; offset < owners.length; offset += 2) {
+      funnels.push(
+        ...(await Promise.all(
+          owners.slice(offset, offset + 2).map(async (owner) => {
+            const funnel = await plan(owner.id, { incremental: true })
+            if (!("latencyMs" in funnel))
+              await db.$executeRaw`INSERT INTO "ProcessingRun" (id,"ownerUserId",kind,"resourceId","idempotencyKey",status,"completedAt","updatedAt")
         SELECT ${randomUUID()}::uuid,${owner.id},'discovery_plan_v1',${owner.id},${`plan:${owner.id}:${randomUUID()}`},'succeeded',now(),now()
         WHERE EXISTS (SELECT 1 FROM "UserProfile" WHERE id=${owner.id} AND "deletionRequestedAt" IS NULL)`
+            return funnel
+          })
+        ))
+      )
     }
-    let matched = 0
-    for (let n = 0; n < 2; n++) {
-      if ((await processMatch()) === "not_claimed") break
-      matched++
-    }
+    const matched = (
+      await Promise.all([processMatch(), processMatch()])
+    ).filter((r) => r !== "not_claimed").length
     return { ingested, planned: owners.length, funnels, matched }
   }
-  return { ensureBoard, ingest, plan, processMatch, recover }
+  async function wake(input: { ownerUserId?: string; boardId?: string }) {
+    // Wakeups identify durable state; they never confer eligibility or ownership.
+    const startedAt = Date.now()
+    let ingested = "not_needed"
+    if (input.boardId) {
+      const run = await ensureBoard(input.boardId)
+      if (run) ingested = await ingest(run.id)
+      // The initiating watcher must never wait behind the fan-out batch limit.
+      if (input.ownerUserId)
+        await plan(input.ownerUserId, { boardId: input.boardId })
+      // Monitoring improves every eligible watcher, even when their browser is
+      // closed. Scheduled global planning repairs any remainder of this batch.
+      const watchers = await db.companyWatch.findMany({
+        where: {
+          boardId: input.boardId,
+          owner: discoveryEligibleOwner(),
+          ...(input.ownerUserId
+            ? { ownerUserId: { not: input.ownerUserId } }
+            : {}),
+        },
+        select: { ownerUserId: true },
+        orderBy: { ownerUserId: "asc" },
+        take: input.ownerUserId ? 9 : 10,
+      })
+      for (let offset = 0; offset < watchers.length; offset += 2)
+        await Promise.all(
+          watchers
+            .slice(offset, offset + 2)
+            .map((watcher) =>
+              plan(watcher.ownerUserId, { boardId: input.boardId })
+            )
+        )
+    }
+    if (input.ownerUserId) {
+      if (!input.boardId) await plan(input.ownerUserId, { incremental: true })
+      const pending = await db.processingRun.findMany({
+        where: {
+          ownerUserId: input.ownerUserId,
+          kind: MATCH_KIND,
+          status: { in: ["pending", "retry_wait"] },
+          availableAt: { lte: new Date() },
+        },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+        take: 3,
+      })
+      const results = []
+      for (
+        let n = 0;
+        n < pending.length && Date.now() - startedAt < 20_000;
+        n += 2
+      )
+        results.push(
+          ...(await Promise.all(
+            pending.slice(n, n + 2).map((r) => processMatch(r.id))
+          ))
+        )
+      return {
+        ingested,
+        matched: results.filter((r) => r !== "not_claimed").length,
+      }
+    }
+    return { ingested, matched: 0 }
+  }
+  return { ensureBoard, ingest, plan, processMatch, recover, wake }
 }

@@ -2,7 +2,12 @@ import { privateRead } from "@/lib/backend/private-read"
 import { createOnboardingService } from "@/lib/domain/onboarding/service"
 import { billingSummary } from "@/lib/billing/service"
 import Link from "next/link"
-import { ArrowUpRight, ArrowRight, Clock, Plus } from "@/components/ui/animated-icons"
+import {
+  ArrowUpRight,
+  ArrowRight,
+  Clock,
+  Plus,
+} from "@/components/ui/animated-icons"
 import { requireCurrentProfile } from "@/lib/auth/context"
 import { db } from "@/lib/db"
 import {
@@ -49,8 +54,9 @@ export default async function Dashboard() {
     ...data.preparing,
     ...data.attention,
   ]
-    .filter((application, index, all) =>
-      all.findIndex((candidate) => candidate.id === application.id) === index
+    .filter(
+      (application, index, all) =>
+        all.findIndex((candidate) => candidate.id === application.id) === index
     )
     .slice(0, 5)
   const needsResume = !resume.version?.confirmed
@@ -74,7 +80,7 @@ export default async function Dashboard() {
             ? `${profile.displayName ?? user.name ?? "Welcome"}, here’s what deserves your attention.`
             : needsResume
               ? "Upload your resume and review your background. We’ll help you find roles worth pursuing."
-              : "Your resume is ready. Choose a company you like and discover roles that connect to your experience."}
+              : "Your resume is ready. Find current openings that connect to your role and experience."}
         </CardDescription>
       </FieldGroup>
       {!hasApplications ? (
@@ -202,7 +208,7 @@ export default async function Dashboard() {
               <CardDescription>
                 {discover.watches.length
                   ? "Your companies are being watched. Check Discover for fresh openings and refine your search."
-                  : "Choose your first company in Discover. We’ll watch for openings that match your background."}
+                  : "Find jobs in Discover using your resume and target role. Follow companies whenever you want ongoing updates."}
               </CardDescription>
             )}
             <Button
@@ -315,7 +321,8 @@ function NextApplication({
           {a.company} · {a.title}
         </ItemDescription>
         <CardDescription className="text-xs">
-          {statusLabels[a.status]}{a.stageName ? ` · ${a.stageName}` : ""}
+          {statusLabels[a.status]}
+          {a.stageName ? ` · ${a.stageName}` : ""}
         </CardDescription>
         {a.followUpOn && (
           <CardDescription

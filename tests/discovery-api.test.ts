@@ -18,6 +18,9 @@ type Call =
   | { operation: "read"; user: CurrentAuthUser; search: string; state: string }
   | { operation: "mutate"; user: CurrentAuthUser; input: unknown }
 const calls: Call[] = []
+const afterCallbacks: (() => unknown)[] = []
+const wakeCalls: { ownerUserId?: string; boardId?: string }[] = []
+let wakeFails = false
 
 mock.module(new URL("../lib/auth/context.ts", import.meta.url).href, {
   namedExports: { getCurrentAuthUser: async () => session },
@@ -36,6 +39,23 @@ mock.module(new URL("../lib/server-env.ts", import.meta.url).href, {
 })
 mock.module(new URL("../lib/db.ts", import.meta.url).href, {
   namedExports: { db: {} },
+})
+mock.module("next/server", {
+  namedExports: {
+    after: (callback: () => unknown) => afterCallbacks.push(callback),
+  },
+})
+mock.module(new URL("../lib/domain/discovery/wake.ts", import.meta.url).href, {
+  namedExports: {
+    wakeDiscovery: async (input: {
+      ownerUserId?: string
+      boardId?: string
+    }) => {
+      wakeCalls.push(input)
+      if (wakeFails) throw new Error("wake failed after response")
+      return { ok: true }
+    },
+  },
 })
 mock.module(
   new URL("../lib/domain/discovery/service.ts", import.meta.url).href,
@@ -59,6 +79,7 @@ mock.module(
             watch: ["action", "boardId", "watching"],
             state: ["action", "postingId", "state"],
             preferences: ["action", "expectedRevision", "targets"],
+            find: ["action"],
           }
           const allowed = keysByAction[String(action.action)]
           if (
@@ -66,6 +87,18 @@ mock.module(
             Object.keys(action).some((key) => !allowed.includes(key))
           )
             throw new UploadError("invalid_input", 400)
+          if (action.action === "find")
+            return {
+              ok: true,
+              data: { ready: true, jobs: [{ id: "job-one" }] },
+              funnel: { planned: 1 },
+              wake: { ownerUserId: identity.id },
+            }
+          if (action.action === "watch" && action.watching === true)
+            return {
+              ok: true,
+              wake: { ownerUserId: identity.id, boardId: action.boardId },
+            }
           return { ok: true }
         },
       }),
@@ -178,6 +211,48 @@ test("verified session identity reaches reads and each supported mutation", asyn
     invoked.slice(1).map((call) => call.operation === "mutate" && call.input),
     mutations
   )
+})
+
+test("Find jobs returns immediate deterministic results and schedules a private wake after response", async () => {
+  const beforeCallbacks = afterCallbacks.length
+  const beforeWakeCalls = wakeCalls.length
+  const response = await POST(postRequest(JSON.stringify({ action: "find" })))
+
+  assert.equal(response.status, 200)
+  assert.equal(response.headers.get("cache-control"), "no-store")
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    data: { ready: true, jobs: [{ id: "job-one" }] },
+    funnel: { planned: 1 },
+  })
+  assert.equal(afterCallbacks.length, beforeCallbacks + 1)
+  assert.equal(wakeCalls.length, beforeWakeCalls)
+  const findCall = calls.at(-1)
+  assert.equal(findCall?.operation, "mutate")
+  if (findCall?.operation === "mutate") {
+    assert.equal(findCall.user, user)
+    assert.deepEqual(findCall.input, { action: "find" })
+  }
+
+  await afterCallbacks.at(-1)?.()
+  assert.deepEqual(wakeCalls.at(-1), { ownerUserId: user.id })
+})
+
+test("a post-response wake failure cannot hide Find jobs results", async () => {
+  wakeFails = true
+  const response = await POST(postRequest(JSON.stringify({ action: "find" })))
+  assert.equal(response.status, 200)
+  assert.deepEqual(await response.json(), {
+    ok: true,
+    data: { ready: true, jobs: [{ id: "job-one" }] },
+    funnel: { planned: 1 },
+  })
+  const callback = afterCallbacks.at(-1)
+  assert.ok(callback)
+  await assert.rejects(async () => {
+    await callback()
+  })
+  wakeFails = false
 })
 
 test("forged owner fields are passed only as untrusted input and rejected by the strict service contract", async () => {

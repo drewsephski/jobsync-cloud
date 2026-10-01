@@ -2,7 +2,10 @@ import { db } from "@/lib/db"
 import { uploadApi } from "@/lib/storage/api"
 import { UploadError } from "@/lib/domain/resume-upload/service"
 import { createDiscoveryService } from "@/lib/domain/discovery/service"
+import { after } from "next/server"
+import { wakeDiscovery } from "@/lib/domain/discovery/wake"
 export const runtime = "nodejs"
+export const maxDuration = 60
 const service = createDiscoveryService(db)
 export async function GET(request: Request) {
   const params = new URL(request.url).searchParams
@@ -33,6 +36,8 @@ export async function POST(request: Request) {
     } catch {
       throw new UploadError("invalid_input", 400)
     }
-    return service.mutate(user, input)
+    const { wake, ...result } = await service.mutate(user, input)
+    if (wake) after(() => wakeDiscovery(wake))
+    return result
   })
 }

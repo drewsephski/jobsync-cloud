@@ -10,7 +10,10 @@ import {
 } from "../lib/auth/session-context"
 import { createAccountDeletion } from "../lib/domain/account/deletion"
 import { exportAccount } from "../lib/domain/account/export"
-import { createDiscoveryWorker, MATCH_KIND } from "../lib/domain/discovery/worker"
+import {
+  createDiscoveryWorker,
+  MATCH_KIND,
+} from "../lib/domain/discovery/worker"
 import { createProcessingRuns } from "../lib/domain/processing-run/service"
 
 nextEnv.loadEnvConfig(process.cwd())
@@ -386,13 +389,20 @@ test("deletion marks work canceled and defers while a worker lease or signed upl
   ])
   assert.deepEqual(await discovery.plan(owner), {
     considered: 0,
+    catalogPostings: 0,
     eligible: 0,
+    surfaced: 0,
     queued: 0,
   })
   assert.equal(matcherCalled, false)
-  assert.equal(await db.jobMatch.count({ where: { ownerUserId: owner } }), matchesBefore)
   assert.equal(
-    await db.processingRun.count({ where: { ownerUserId: owner, kind: MATCH_KIND } }),
+    await db.jobMatch.count({ where: { ownerUserId: owner } }),
+    matchesBefore
+  )
+  assert.equal(
+    await db.processingRun.count({
+      where: { ownerUserId: owner, kind: MATCH_KIND },
+    }),
     discoveryRunsBefore
   )
   assert.ok(
