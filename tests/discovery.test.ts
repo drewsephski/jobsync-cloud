@@ -1404,7 +1404,7 @@ test("real Postgres: first-use discovery works without watches and concurrent sc
     )
   } finally {
     await db.companyWatch.deleteMany({
-      where: { ownerUserId: { in: fanoutOwners } },
+      where: { ownerUserId: { in: [...fanoutOwners, ...owners] } },
     })
     await db.userProfile.deleteMany({ where: { id: { in: fanoutOwners } } })
     await db.aiUsage.deleteMany({ where: { ownerUserId: { in: owners } } })

@@ -59,6 +59,8 @@ next-env.d.ts
 /output/discovery-baseline-proof.json
 /output/discovery-full-suite.log
 /output/discovery-warm-catalog.json
+# Private discovery validation receipts and logs
+/output/discovery-*
 
 /output/application-preview-proof.json
 

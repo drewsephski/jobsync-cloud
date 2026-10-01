@@ -646,6 +646,9 @@ test("@discovery-live new users find jobs before following companies and recover
     awayWork.enhanced?.aiAnalyzedAt ?? null
   evidence.companyRematchedAfterBrowserClosedAt =
     awayWork.rematched?.createdAt ?? null
+  evidence.watchToPrivateRematchMs = awayWork.rematched
+    ? awayWork.rematched.createdAt.getTime() - watchStartedAt
+    : null
   evidence.ai = await recordAiEvidence([owner])
   evidence.durableAfterPageClosed = true
   await persistEvidence()
@@ -675,6 +678,7 @@ test("@discovery-live new users find jobs before following companies and recover
       .click()
   const enhancedCard = await jobCard(returnedPage, enhancedResult.job)
   await expect(enhancedCard.getByText(/AI match · \d+\/100/)).toBeVisible()
+  evidence.firstAiVisibleAfterReturnMs = Date.now() - firstUse.clickedAt
   await returnedPage.getByRole("tab", { name: /Saved/ }).click()
   const returnedSavedCard = await jobCard(returnedPage, firstJob)
   await expect(returnedSavedCard).toBeVisible()
@@ -778,11 +782,23 @@ test("@discovery-live new users find jobs before following companies and recover
   const staleAfterPreferences = await (
     await proofPage.request.get("/api/discovery?state=saved")
   ).json()
-  expect(
-    staleAfterPreferences.jobs.find(
-      (job: { id: string }) => job.id === firstJob.id
-    )?.stale
-  ).toBe(true)
+  const savedPreferenceResult = staleAfterPreferences.jobs.find(
+    (job: { id: string }) => job.id === firstJob.id
+  )
+  expect(savedPreferenceResult).toBeTruthy()
+  // Preferences recompute deterministically in the same action. A saved card
+  // may already have a new current match, but must never reuse the old AI review.
+  expect(savedPreferenceResult.aiScore).toBeNull()
+  expect(savedPreferenceResult.rationale).toBeNull()
+  if (!savedPreferenceResult.stale) {
+    expect(savedPreferenceResult.matchId).not.toBe(firstJob.matchId)
+    const revisedMatch = await db.jobMatch.findUniqueOrThrow({
+      where: { id: savedPreferenceResult.matchId },
+    })
+    expect(revisedMatch.preferenceRevision).toBeGreaterThan(
+      revisionBefore.preferenceRevision
+    )
+  }
   expect(
     (
       await db.userJobState.findUniqueOrThrow({
@@ -854,6 +870,13 @@ test("@discovery-live new users find jobs before following companies and recover
   await proofContext.close()
 
   const ai = await recordAiEvidence(owners)
+  expect(ai.unknownCostCalls).toBe(0)
+  expect(
+    ai.receipts.every((receipt) => receipt.actualProvider === "Azure")
+  ).toBe(true)
+  expect(
+    ai.reservations.every((reservation) => reservation.status === "settled")
+  ).toBe(true)
   const boardAfter = await db.atsBoard.findUniqueOrThrow({
     where: { id: boardBefore.id },
   })
@@ -873,7 +896,13 @@ test("@discovery-live new users find jobs before following companies and recover
     freshCatalogPostingsAvailable:
       (initialPlan.checkpoint as { catalogPostings?: number } | null)
         ?.catalogPostings ?? considered,
-    deterministicCandidatesForFirstUser: await db.jobMatch.count({
+    deterministicCandidatesForFirstUser: (
+      initialPlan.checkpoint as { surfaced: number }
+    ).surfaced,
+    eligibleCandidatesForFirstUser: (
+      initialPlan.checkpoint as { eligible: number }
+    ).eligible,
+    materializedHistoricalMatchRowsForFirstUser: await db.jobMatch.count({
       where: { ownerUserId: owner },
     }),
     secondUserCandidates: await db.jobMatch.count({

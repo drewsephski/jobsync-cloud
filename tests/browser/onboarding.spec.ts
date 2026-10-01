@@ -45,13 +45,32 @@ test.afterAll(async () => {
       },
       data: { status: "canceled", cancellationRequestedAt: new Date() },
     })
+    await db.processingRun.updateMany({
+      where: { ownerUserId: { in: users }, status: "running" },
+      data: { cancellationRequestedAt: new Date() },
+    })
     await expect
       .poll(
-        () =>
-          db.processingRun.count({
+        async () => {
+          await db.processingRun.updateMany({
+            where: {
+              ownerUserId: { in: users },
+              status: "running",
+              leaseExpiresAt: { lte: new Date() },
+              cancellationRequestedAt: { not: null },
+            },
+            data: {
+              status: "canceled",
+              leaseToken: null,
+              leaseExpiresAt: null,
+              completedAt: new Date(),
+            },
+          })
+          return db.processingRun.count({
             where: { ownerUserId: { in: users }, status: "running" },
-          }),
-        { timeout: 45_000 }
+          })
+        },
+        { timeout: 150_000 }
       )
       .toBe(0)
     const usage = await db.aiUsage.findMany({
@@ -459,10 +478,16 @@ test("@fixture sidebar indicator persists across routes, history, refresh and re
   )
   for (const label of ["Home", "Jobs", "Resume", "Discover"]) {
     await navigation.getByRole("link", { name: label, exact: true }).click()
+    await expect(page).toHaveURL(
+      new RegExp(
+        `/dashboard${label === "Home" ? "" : `/${label.toLowerCase()}`}$`
+      )
+    )
     await selected(label)
     await expect(indicator).toHaveAttribute("data-proof", "persistent")
   }
   await page.goBack()
+  await expect(page).toHaveURL(/\/dashboard\/resume$/)
   await selected("Resume")
   await page.reload()
   await selected("Resume")

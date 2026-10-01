@@ -4,10 +4,6 @@ import { execFileSync } from "node:child_process"
 import { randomUUID } from "node:crypto"
 import { createDatabaseClient } from "../../lib/backend/create-db-client"
 import { sanitizedResume } from "../resume-structure-fixtures"
-import {
-  ALGORITHM_VERSION,
-  preferenceFingerprint,
-} from "../../lib/domain/discovery/relevance"
 
 const project = "lively-shape-65452824"
 const branch = "br-tiny-tree-b44fo1lv"
@@ -21,6 +17,105 @@ let fixturePostingSnapshot: {
   contentHash: string
   open: boolean
 } | null = null
+
+async function aiEvidence(ownerIds: string[]) {
+  const [usage, reservations] = await Promise.all([
+    db.aiUsage.findMany({
+      where: { ownerUserId: { in: ownerIds } },
+      orderBy: { createdAt: "asc" },
+    }),
+    db.aiUsageReservation.findMany({
+      where: { ownerUserId: { in: ownerIds } },
+    }),
+  ])
+  expect(usage.every((row) => ownerIds.includes(row.ownerUserId))).toBe(true)
+  const reservationKeys = new Set(
+    reservations.map((row) => `${row.ownerUserId}:${row.id}`)
+  )
+  expect(
+    usage.every(
+      (row) =>
+        row.reservationId === null ||
+        reservationKeys.has(`${row.ownerUserId}:${row.reservationId}`)
+    )
+  ).toBe(true)
+  const receipts = usage.map((row) => {
+    const metadata = (row.metadata ?? {}) as {
+      actualCostUsd?: number | null
+      latencyMs?: number | null
+    }
+    return {
+      owner: ownerIds.indexOf(row.ownerUserId) + 1,
+      feature: row.feature,
+      provider: row.provider,
+      model: row.model,
+      status: row.status,
+      inputTokens: row.inputTokens,
+      outputTokens: row.outputTokens,
+      actualCostUsd: metadata.actualCostUsd ?? null,
+      latencyMs: metadata.latencyMs ?? null,
+      costUnknown:
+        metadata.actualCostUsd == null ||
+        row.costMicroUsd === null ||
+        row.status === "reconciliation_required",
+    }
+  })
+  return {
+    calls: usage.length,
+    resumeAiCalls: usage.filter((row) => row.feature === "resume_structure_v1")
+      .length,
+    matchAiCalls: usage.filter((row) => row.feature === "job_match_v1").length,
+    tokens: {
+      input: usage.reduce((sum, row) => sum + (row.inputTokens ?? 0), 0),
+      output: usage.reduce((sum, row) => sum + (row.outputTokens ?? 0), 0),
+    },
+    knownActualCostUsd: receipts.reduce(
+      (sum, receipt) => sum + (receipt.actualCostUsd ?? 0),
+      0
+    ),
+    unknownCostCalls: receipts.filter((receipt) => receipt.costUnknown).length,
+    reservations: reservations.map((row) => ({
+      status: row.status,
+      reservedCeilingUsd: Number(row.reservedCostMicroUsd) / 1_000_000,
+      finalCostUsd:
+        row.finalCostMicroUsd === null
+          ? null
+          : Number(row.finalCostMicroUsd) / 1_000_000,
+    })),
+    receipts,
+  }
+}
+
+async function waitForWorkers(ownerIds: string[]) {
+  const deadline = Date.now() + 150_000
+  while (Date.now() < deadline) {
+    const now = new Date()
+    // Canceled invocations may retain their lease until expiry. Reap only this
+    // fixture's canceled rows after that durable lease has elapsed.
+    await db.processingRun.updateMany({
+      where: {
+        ownerUserId: { in: ownerIds },
+        status: "running",
+        cancellationRequestedAt: { not: null },
+        leaseExpiresAt: { lte: now },
+      },
+      data: {
+        status: "canceled",
+        leaseToken: null,
+        leaseExpiresAt: null,
+        completedAt: now,
+      },
+    })
+    if (
+      (await db.processingRun.count({
+        where: { ownerUserId: { in: ownerIds }, status: "running" },
+      })) === 0
+    )
+      return
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+  }
+  throw new Error("fixture discovery workers did not quiesce for cleanup")
+}
 
 test.beforeAll(async () => {
   assert.ok(
@@ -37,26 +132,50 @@ test.beforeAll(async () => {
 })
 
 test.afterAll(async () => {
+  let matchAiCalls = 0
   try {
     assert.ok(
       users.every((id) => !baselineProfiles.some((p) => p.id === id)),
       "only fixture users can be removed"
     )
     if (users.length) {
-      expect(
-        await db.aiUsage.count({ where: { ownerUserId: { in: users } } })
-      ).toBe(0)
-      expect(
-        await db.aiUsageReservation.count({
-          where: { ownerUserId: { in: users } },
-        })
-      ).toBe(0)
+      const now = new Date()
+      await db.userProfile.updateMany({
+        where: { id: { in: users } },
+        data: { deletionRequestedAt: now },
+      })
+      await db.processingRun.updateMany({
+        where: {
+          ownerUserId: { in: users },
+          status: { in: ["pending", "retry_wait"] },
+        },
+        data: { status: "canceled", cancellationRequestedAt: now },
+      })
+      await db.processingRun.updateMany({
+        where: { ownerUserId: { in: users }, status: "running" },
+        data: { cancellationRequestedAt: now },
+      })
+      await waitForWorkers(users)
+      const evidence = await aiEvidence(users)
+      expect(evidence.resumeAiCalls).toBe(0)
+      matchAiCalls = evidence.matchAiCalls
+      console.log(JSON.stringify({ aiUsage: evidence }))
       await db.application.deleteMany({ where: { ownerUserId: { in: users } } })
       await db.userJobState.deleteMany({
         where: { ownerUserId: { in: users } },
       })
+      await db.processingRun.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
       await db.jobMatch.deleteMany({ where: { ownerUserId: { in: users } } })
       await db.companyWatch.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
+      await db.discoveryAllowance.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
+      await db.aiUsage.deleteMany({ where: { ownerUserId: { in: users } } })
+      await db.aiUsageReservation.deleteMany({
         where: { ownerUserId: { in: users } },
       })
       await db.targetPreference.deleteMany({
@@ -110,7 +229,8 @@ test.afterAll(async () => {
         cleanup: "complete",
         publicPostingsPreserved: true,
         founderPreserved: true,
-        zeroAiCalls: true,
+        zeroResumeAiCalls: true,
+        matchAiCalls,
         temporaryAuthUsers: users.length,
       })
     )
@@ -140,24 +260,6 @@ async function signup(page: Page) {
 }
 
 async function seed(owner: string) {
-  const posting = await db.jobPosting.findFirst({
-    where: {
-      open: true,
-      board: { enabled: true, slug: { in: ["figma", "spotify", "linear"] } },
-      title: { contains: "engineer", mode: "insensitive" },
-    },
-    include: { board: { include: { company: true } } },
-    orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
-  })
-  assert.ok(
-    posting,
-    "fixture branch needs an existing open engineering posting"
-  )
-  fixturePostingSnapshot = {
-    id: posting.id,
-    contentHash: posting.contentHash,
-    open: posting.open,
-  }
   const now = new Date()
   const resume = await db.resume.create({
     data: { ownerUserId: owner, title: "Synthetic confirmed resume" },
@@ -172,14 +274,13 @@ async function seed(owner: string) {
       data: sanitizedResume,
     },
   })
-  const target = await db.targetPreference.create({
+  await db.targetPreference.create({
     data: {
       ownerUserId: owner,
       targetTitle: "Software Engineer",
       keywords: ["TypeScript", "PostgreSQL"],
     },
   })
-  const preferenceHash = preferenceFingerprint([target])
   await db.$transaction([
     db.resume.update({
       where: { id: resume.id },
@@ -194,31 +295,16 @@ async function seed(owner: string) {
       },
     }),
   ])
-  const match = await db.jobMatch.create({
-    data: {
-      ownerUserId: owner,
-      resumeId: resume.id,
-      resumeVersionId: version.id,
-      preferenceRevision: 1,
-      preferenceHash,
-      jobPostingId: posting.id,
-      postingVersion: posting.contentVersion,
-      postingHash: posting.contentHash,
-      algorithmVersion: ALGORITHM_VERSION,
-      inputKey: `browser:${randomUUID()}`,
-      relevance: 86,
-      reasons: [
-        "Title overlaps your Software Engineer target",
-        "Resume skills mentioned: TypeScript",
-      ],
-    },
-  })
-  // A private saved state makes the intentional historical match visible without a watch
-  // or a scheduler/AI side effect.
-  await db.userJobState.create({
-    data: { ownerUserId: owner, jobPostingId: posting.id, state: "saved" },
-  })
-  return { posting, match }
+  // Finding should create this user's private deterministic match from the
+  // shared catalog. No company watch or seeded match is needed.
+}
+
+async function jobCard(page: Page, posting: { originalUrl: string }) {
+  const link = page
+    .getByRole("button", { name: "Original posting", exact: true })
+    .and(page.locator(`[href=${JSON.stringify(posting.originalUrl)}]`))
+  await expect(link).toBeVisible()
+  return link.locator("xpath=ancestor::*[@data-slot='card'][1]")
 }
 
 async function applications(page: Page) {
@@ -244,17 +330,58 @@ test("applications conversion and private lifecycle stay durable and isolated", 
   browser,
 }) => {
   const owner = await signup(page)
-  const { posting, match } = await seed(owner)
+  await seed(owner)
 
   await page.goto("/dashboard/discover")
-  await page.getByRole("tab", { name: /Saved/ }).click()
-  const job = page.getByText(posting.title, { exact: true })
-  await expect(job).toBeVisible()
-  await expect(
-    page.getByText(posting.board.company.name, { exact: true })
-  ).toBeVisible()
-  await expect(page.getByText(/No completed AI analysis yet/)).toBeVisible()
+  expect(await db.companyWatch.count({ where: { ownerUserId: owner } })).toBe(0)
+  const initialData = await (await page.request.get("/api/discovery")).json()
+  expect(initialData.jobs.length).toBeGreaterThan(0)
+  const selectedResult = initialData.jobs[0]
+  const posting = await db.jobPosting.findUniqueOrThrow({
+    where: { id: selectedResult.id },
+    include: { board: { include: { company: true } } },
+  })
+  fixturePostingSnapshot = {
+    id: posting.id,
+    contentHash: posting.contentHash,
+    open: posting.open,
+  }
+  expect(
+    await db.aiUsage.count({
+      where: { ownerUserId: owner, feature: "resume_structure_v1" },
+    })
+  ).toBe(0)
+  expect(await db.companyWatch.count({ where: { ownerUserId: owner } })).toBe(0)
 
+  const card = await jobCard(page, posting)
+  await expect(card).toBeVisible()
+  await expect(
+    card.getByText("Matches your search", { exact: true })
+  ).toBeVisible()
+  await expect(
+    card
+      .getByText("Why this is worth a look", { exact: true })
+      .or(card.getByText(/^AI match · \d+\/100/))
+  ).toBeVisible()
+  await expect
+    .poll(
+      () =>
+        db.jobMatch.count({
+          where: { ownerUserId: owner, aiScore: { not: null } },
+        }),
+      { timeout: 90_000, intervals: [500, 1000, 2000, 3000] }
+    )
+    .toBeGreaterThan(0)
+  await page
+    .getByRole("button", { name: "Refresh matches", exact: true })
+    .click()
+  await expect(page.getByText(/^AI match · \d+\/100/).first()).toBeVisible({
+    timeout: 30_000,
+  })
+  const match = await db.jobMatch.findFirstOrThrow({
+    where: { ownerUserId: owner, jobPostingId: posting.id },
+    orderBy: { createdAt: "desc" },
+  })
   const trackInput = {
     action: "track",
     postingId: posting.id,
@@ -265,7 +392,7 @@ test("applications conversion and private lifecycle stay durable and isolated", 
       response.url().includes("/api/applications") &&
       response.request().method() === "POST"
   )
-  await page
+  await card
     .getByRole("button", { name: "Track application", exact: true })
     .click()
   const trackResponse = await trackResponsePromise

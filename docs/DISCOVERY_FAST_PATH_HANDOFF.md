@@ -112,3 +112,80 @@ produced zero cards, Find was unsupported, and watching fresh Figma took 80.958 
 to produce 26 cards. One baseline AI usage row was deleted before receipt details
 were captured; its tokens/cost remain unknown. This is a comparative discovery
 baseline, not an end-to-end onboarding claim.
+
+## Production walkthrough — 2026-10-01
+
+Two new isolated accounts signed up through the production UI, uploaded synthetic
+DOCX resumes, reviewed and confirmed the real Azure/Luna drafts, and selected
+Software Engineer or Product Designer. Email activation used an admin fixture
+scoped to each new session and unique email; this does not prove SMTP delivery.
+Neither account selected a company before receiving jobs.
+
+| Measurement | Observed |
+| --- | ---: |
+| Engineer: Find jobs click → deterministic cards | 6.766 s |
+| Designer: Find jobs click → deterministic cards | 2.702 s |
+| Engineer: click → first stored AI-enhanced match | 10.424 s |
+| Engineer: click → first AI explanation visible in the UI | 13.265 s |
+| Watch surfaced company → shared ingestion complete | 1.701 s |
+| Watch → private company rematch complete | 2.584 s |
+| Fresh public catalog available | 2,619 postings |
+| Indexed title candidates considered for the engineer | 854 |
+| Deterministically eligible / initially surfaced | 296 / 50 |
+| Designer's independent surfaced candidates | 50 |
+| Shared board fetches caused by the due watch | 1 |
+| Public posting rows before / after the two-user proof | 2,619 / 2,619 |
+| Duplicate public board/external-ID pairs | 0 |
+
+These are real single-run observations, not p95 estimates. The first account's
+page/plan was slower than the second; further first-request latency work remains
+possible. There was no provider fetch or AI dependency before first cards. The
+prior deployed flow could not find jobs without watches and took 80.958 s after
+a fresh-board watch to surface cards.
+
+The engineer saved, tracked and dismissed jobs, watched a surfaced company, and
+closed the entire browser context. Shared ingestion and private company rematching
+finished afterward. Returning showed persisted actions and enhanced matches. The
+designer closed its context after first cards; an AI enhancement completed while
+it was away. Different target/preference fingerprints and private matches/receipt
+ownership were verified over the same public rows.
+
+Preference changes immediately recomputed current deterministic matches while
+retaining actions; the previous AI review was not reused. Confirming a changed
+resume marked prior saved matches stale and hid their AI results. Desktop and
+390-pixel mobile screenshots were reviewed, horizontal overflow was checked, and
+the explanation title's width/height was asserted against the corrected UI alert.
+
+| Successful two-account proof: OpenRouter receipts | Calls | Input tokens | Output tokens | Actual USD |
+| --- | ---: | ---: | ---: | ---: |
+| Resume structure | 2 | 1,395 | 630 | 0.000449955 |
+| Job matching | 6 | 9,925 | 1,097 | 0.001257894 |
+| Total | 8 | 11,320 | 1,727 | 0.001707849 |
+
+Every receipt named Azure, GPT-6 Luna, ZDR and data collection denial. All eight
+owner-scoped reservations settled with known cost; zero unknown-cost calls or
+automatic uncertain-outcome retries occurred. Provider cost is reported at its
+exact USD precision; ledger settlement rounds each receipt upward to micro-USD.
+Four earlier browser-test attempts made 20 known-cost calls totaling $0.004552763;
+their failures were test locators/timing/provenance assertions, not paid retries.
+The separate old-flow baseline's one uncaptured receipt remains unknown.
+
+Cleanup removed both proof accounts from Neon Auth, their uploaded objects and
+all private resume/match/action/application/run/usage/allowance rows. Existing
+profiles and service-owned catalog rows were preserved. Evidence and screenshots
+remain in ignored `output/discovery-first-use-proof.json` and `output/playwright/`.
+
+The additive migration is applied to production. The app is live at
+`https://jobsync-cloud.vercel.app`; the discovery Neon Function deployment is 12,
+with its authenticated `/wake` configured in Vercel. Scheduled `/recover` remains
+every five minutes, and the existing resume/account Function schedules are intact.
+
+Final verification: all 190 tests in `pnpm test` passed, including 27 discovery
+tests with real PostgreSQL concurrency, shared fetch deduplication, private
+planning, cursor continuation across refresh, and caller-priority fan-out. Seven
+relevant production browser cases passed: the new two-user discovery walkthrough,
+application isolation/lifecycle, two onboarding/navigation fixtures, public UI,
+and two animation/reduced-motion cases. Lint (one existing image-card warning),
+TypeScript, Prisma validation, production build and `git diff --check` passed.
+The onboarding/application fixtures were updated for watch-free auto-planning
+and safe cleanup of canceled invocations through their lease expiry.
