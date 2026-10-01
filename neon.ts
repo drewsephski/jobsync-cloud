@@ -6,7 +6,7 @@ export default defineConfig({
     resumeworker: {
       name: "Resume processing worker",
       source: "./functions/resume-worker.ts",
-      externalPackages: ["unpdf", "fast-xml-parser"],
+      externalPackages: ["unpdf", "fast-xml-parser", "mammoth"],
       env: process.env.OPENROUTER_API_KEY
         ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
         : undefined,

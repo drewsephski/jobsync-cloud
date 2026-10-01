@@ -54,6 +54,7 @@ model UserProfile {
   displayName           String?
   timezone              String?
   onboardingCompletedAt DateTime? @db.Timestamptz(3)
+  preferenceRevision    Int       @default(0)
   createdAt             DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
 
@@ -70,6 +71,9 @@ model Resume {
   id          String   @id @default(uuid()) @db.Uuid
   ownerUserId String
   title       String
+  confirmedVersionId String? @unique @db.Uuid
+  confirmedAt DateTime? @db.Timestamptz(3)
+  confirmedVersion ResumeVersion? @relation("ConfirmedResume", fields: [ownerUserId, id, confirmedVersionId], references: [ownerUserId, resumeId, id], onDelete: Restrict, onUpdate: Restrict)
   createdAt   DateTime @default(now()) @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @db.Timestamptz(3)
 
@@ -91,6 +95,10 @@ model ResumeVersion {
   source           ResumeVersionSource
   status           ResumeVersionStatus @default(draft)
   data             Json                @db.JsonB
+  originDraftId    String? @db.Uuid
+  originDraft ResumeVersion? @relation("DraftEdits", fields: [ownerUserId, resumeId, originDraftId], references: [ownerUserId, resumeId, id], onDelete: Restrict, onUpdate: Restrict)
+  edits ResumeVersion[] @relation("DraftEdits")
+  confirmedFor Resume[] @relation("ConfirmedResume")
   sourceUploadId   String?             @unique @db.Uuid
   processingRunId  String?             @unique @db.Uuid
   sourceSha256     String?             @db.VarChar(64)
@@ -109,6 +117,7 @@ model ResumeVersion {
 
   @@unique([ownerUserId, resumeId, sourceUploadId, sourceSha256])
   @@unique([ownerUserId, processingRunId])
+  @@unique([ownerUserId, resumeId, id])
   @@unique([resumeId, version])
   @@index([ownerUserId, resumeId])
 }

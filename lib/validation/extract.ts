@@ -6,34 +6,36 @@ import { FileValidationError } from "./errors"
 import { MAX_RESUME_FILE_SIZE_BYTES } from "./constants"
 export const EXTRACT_MAX_CHARS = 40_000
 export const EXTRACT_TIMEOUT_MS = 15_000
-export const EXTRACTION_VERSION = "local-text-v1"
+export const EXTRACTION_VERSION = "unpdf-1.8.1-mammoth-1.13.0-v1"
 const docxSource = `
 const {parentPort, workerData} = require('node:worker_threads');
 console.log = console.warn = console.error = () => {};
 (async () => {
  try {
-  const {XMLParser} = await import(workerData.moduleUrl);
-  const tree = new XMLParser({preserveOrder:true, ignoreAttributes:true, removeNSPrefix:true, processEntities:true, parseTagValue:false, trimValues:false}).parse(workerData.xml);
-  let text = '';
-  function add(value) { text += value; if (text.length > workerData.maxChars) throw Error('text_too_large'); }
-  function walk(nodes) { for (const node of nodes) for (const [key,value] of Object.entries(node)) {
-   if (['del','instrText','delText'].includes(key)) continue;
-   if (key === 't') { for (const item of value) if (typeof item['#text'] === 'string') add(item['#text']); }
-   else if (key === 'tab') add('\\t');
-   if (key !== 't' && Array.isArray(value)) walk(value);
-   if (key === 'p' || key === 'br' || key === 'cr') add('\\n');
-  }}
-  walk(tree); parentPort.postMessage({text});
- } catch (error) { parentPort.postMessage({code:error.message === 'text_too_large' ? 'text_too_large' : 'invalid_docx'}); }
+  const imported = await import(workerData.moduleUrl);
+  const mammoth = imported.default ?? imported;
+  const result = await mammoth.extractRawText({buffer: Buffer.from(workerData.bytes)});
+  if (result.value.length > workerData.maxChars) {
+   parentPort.postMessage({code:'text_too_large'});
+   return;
+  }
+  if (result.messages.some(message => message.type === 'error')) {
+   parentPort.postMessage({code:'invalid_docx'});
+   return;
+  }
+  parentPort.postMessage({text:result.value});
+ } catch { parentPort.postMessage({code:'invalid_docx'}); }
 })();`
 async function extractDocx(bytes: Buffer) {
-  const xml = validateDocx(bytes, true)
+  // Full validation must precede Mammoth: it checks every ZIP entry's claimed
+  // and actual inflated size and CRC before the parser opens the archive.
+  validateDocx(bytes)
   const worker = new Worker(docxSource, {
     eval: true,
     workerData: {
-      xml,
+      bytes,
       maxChars: EXTRACT_MAX_CHARS,
-      moduleUrl: import.meta.resolve("fast-xml-parser"),
+      moduleUrl: import.meta.resolve("mammoth"),
     },
     resourceLimits: {
       maxOldGenerationSizeMb: 128,

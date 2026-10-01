@@ -14,6 +14,24 @@ export async function GET(
       status.validation.state === "valid"
         ? await readResumeStructureStatus(db, user.id, uploadId)
         : null
-    return { ...status, structuring }
+    const validationRun =
+      status.validation.state === "pending"
+        ? await db.processingRun.findFirst({
+            where: {
+              ownerUserId: user.id,
+              resourceId: uploadId,
+              kind: "resume_validate_v1",
+              status: { in: ["failed", "canceled"] },
+            },
+            select: { status: true },
+          })
+        : null
+    return {
+      ...status,
+      structuring,
+      processingFailure: validationRun
+        ? "We couldn’t finish checking this file. Your upload record is saved. Try uploading a new text-based PDF or DOCX."
+        : null,
+    }
   })
 }

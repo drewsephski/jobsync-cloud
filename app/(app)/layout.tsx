@@ -9,5 +9,5 @@ export default async function AppLayout({
   children: React.ReactNode
 }) {
   await requireCurrentProfile()
-  return <main className="mx-auto w-full max-w-3xl p-6">{children}</main>
+  return <main className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">{children}</main>
 }

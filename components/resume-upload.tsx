@@ -1,17 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { FileUp, Loader2 } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
 import type { StructuredResume } from "@/lib/ai/resume-schema"
-import {
-  Card,
-  CardHeader,
-  CardContent,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card"
+import { CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -46,6 +42,9 @@ const FRIENDLY_ERRORS: Record<number, string> = {
 
 function getErrorMessage(error: unknown, status?: number) {
   if (status && FRIENDLY_ERRORS[status]) return FRIENDLY_ERRORS[status]
+  if (error instanceof Error && error.message === "Storage upload failed") {
+    return "The private file upload did not finish. Check your connection and retry; processing starts only after the file arrives."
+  }
   if (error instanceof Error && error.message === "Network request failed") {
     return "The request could not reach JobSync. Check your connection and retry."
   }
@@ -55,7 +54,11 @@ function getErrorMessage(error: unknown, status?: number) {
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   let response: Response
   try {
-    response = await fetch(url, { cache: "no-store", ...init })
+    response = await fetch(url, {
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+      ...init,
+    })
   } catch {
     throw new Error("Network request failed")
   }
@@ -79,6 +82,7 @@ export function ResumeUpload({
 }: {
   initialUploadId?: string | null
 }) {
+  const router = useRouter()
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState(
     initialUploadId
@@ -88,7 +92,6 @@ export function ResumeUpload({
   const [error, setError] = useState<string | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(initialUploadId)
   const [validated, setValidated] = useState(false)
-  const [draft, setDraft] = useState<StructuredResume | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -111,6 +114,7 @@ export function ResumeUpload({
         if (abort.signal.aborted) return
         try {
           const result = await requestJson<{
+            processingFailure?: string | null
             structuring: {
               state: "processing" | "draft" | "failed"
               message: string
@@ -124,6 +128,10 @@ export function ResumeUpload({
             signal: AbortSignal.any([abort.signal, AbortSignal.timeout(5000)]),
           })
           if (abort.signal.aborted) return
+          if (result.processingFailure) {
+            setError(result.processingFailure)
+            return
+          }
           if (result.validation.state === "valid") {
             setValidated(true)
             setStatus(
@@ -131,7 +139,7 @@ export function ResumeUpload({
                 "Resume file validated. Preparing your structured draft…"
             )
             if (result.structuring?.state === "draft") {
-              setDraft(result.structuring.draft!.data)
+              router.refresh()
               return
             }
             if (result.structuring?.state === "failed") {
@@ -149,6 +157,9 @@ export function ResumeUpload({
           }
         } catch {
           if (abort.signal.aborted) return
+          setStatus(
+            "We couldn’t check processing progress. We’ll retry shortly; your uploaded file is saved."
+          )
         }
         delay = Math.min(delay ? delay * 1.5 : 1000, 5000)
       }
@@ -159,13 +170,12 @@ export function ResumeUpload({
     }
     void poll()
     return () => abort.abort()
-  }, [uploadId])
+  }, [uploadId, router])
 
   function selectFile(nextFile: File | null) {
     setFile(nextFile)
     setUploadId(null)
     setValidated(false)
-    setDraft(null)
     setError(null)
     setStatus(
       nextFile ? "Ready to upload." : "Choose a PDF or DOCX file to begin."
@@ -178,7 +188,6 @@ export function ResumeUpload({
     setError(null)
     setUploadId(null)
     setValidated(false)
-    setDraft(null)
 
     try {
       const intent = uploadIntentSchema.parse({
@@ -202,10 +211,11 @@ export function ResumeUpload({
         headers: signed.upload.headers,
         body: file,
         credentials: "omit",
+        signal: AbortSignal.timeout(60_000),
       }).catch(() => {
-        throw new Error("Network request failed")
+        throw new Error("Storage upload failed")
       })
-      if (!putResponse.ok) throw new Error("Upload request failed")
+      if (!putResponse.ok) throw new Error("Storage upload failed")
 
       setStatus("Upload received. Checking the file…")
       setUploadId(signed.uploadId)
@@ -295,7 +305,8 @@ export function ResumeUpload({
           onClick={uploadSelectedFile}
           disabled={!file || busy}
         >
-          {busy ? "Working…" : "Upload resume"}
+          {busy ? <Loader2 className="motion-safe:animate-spin" /> : <FileUp />}
+          {busy ? "Uploading…" : "Upload resume"}
         </Button>
         {uploadId && validated ? (
           <Button
@@ -312,82 +323,12 @@ export function ResumeUpload({
       <CardDescription role="status" aria-live="polite">
         {status}
       </CardDescription>
-      {draft ? (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2}>
-              Structured draft · review required
-            </CardTitle>
-            <CardDescription>
-              Check all facts and dates against your original file. This draft
-              has not been accepted or finalized.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-4">
-            <CardDescription className="whitespace-pre-wrap">
-              {[
-                draft.contact.name,
-                draft.contact.email,
-                draft.contact.phone,
-                draft.contact.location,
-                ...draft.contact.links,
-              ]
-                .filter(Boolean)
-                .join("\n")}
-            </CardDescription>
-            {draft.summary ? (
-              <CardDescription>{draft.summary}</CardDescription>
-            ) : null}
-            {draft.skills.length ? (
-              <CardDescription>
-                Skills: {draft.skills.join(" · ")}
-              </CardDescription>
-            ) : null}
-            {draft.employment.map((entry, index) => (
-              <FieldGroup key={index} className="gap-1">
-                <CardTitle role="heading" aria-level={3}>
-                  {[entry.title, entry.employer].filter(Boolean).join(" · ")}
-                </CardTitle>
-                <CardDescription>
-                  {[entry.startDate, entry.endDate].filter(Boolean).join(" – ")}
-                  {entry.location ? ` · ${entry.location}` : ""}
-                </CardDescription>
-                {entry.highlights.map((line, i) => (
-                  <CardDescription key={i}>{line}</CardDescription>
-                ))}
-              </FieldGroup>
-            ))}
-            {draft.education.map((entry, index) => (
-              <FieldGroup key={index} className="gap-1">
-                <CardTitle role="heading" aria-level={3}>
-                  {entry.institution}
-                </CardTitle>
-                <CardDescription>
-                  {[
-                    entry.qualification,
-                    entry.field,
-                    entry.startDate,
-                    entry.endDate,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </CardDescription>
-              </FieldGroup>
-            ))}
-            {draft.credentials.map((entry, index) => (
-              <CardDescription key={index}>
-                {[entry.name, entry.issuer, entry.date]
-                  .filter(Boolean)
-                  .join(" · ")}
-              </CardDescription>
-            ))}
-          </CardContent>
-        </Card>
-      ) : null}
       {error ? (
-        <Alert variant="destructive">
-          <AlertTitle>Upload unavailable</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
+        <Alert variant="destructive" role="alert">
+          <AlertTitle>Your resume needs attention</AlertTitle>
+          <AlertDescription>
+            {error} Choose a replacement file above to try again.
+          </AlertDescription>
         </Alert>
       ) : null}
     </FieldGroup>

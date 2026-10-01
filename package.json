@@ -25,7 +25,11 @@
     "validation:test": "node --import tsx --test tests/validation.test.ts",
     "worker:test": "node --import tsx --test --test-concurrency=1 tests/processing-run.test.ts tests/trigger-handler.test.ts tests/resume-worker.test.ts tests/download-object.test.ts tests/runtime-boundary.test.ts",
     "ai:test": "node --import tsx --test --test-concurrency=1 tests/extraction.test.ts tests/ai-boundary.test.ts tests/ai-accounting.test.ts",
-    "ai:live-proof": "node --import tsx scripts/ai-live-proof.ts"
+    "onboarding:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/onboarding.test.ts tests/onboarding-api.test.ts",
+    "test": "pnpm db:test && pnpm auth:test && pnpm storage:test && pnpm validation:test && pnpm worker:test && pnpm ai:test && pnpm onboarding:test",
+    "ai:live-proof": "node --import tsx scripts/ai-live-proof.ts",
+    "onboarding:browser:test": "playwright test --grep @fixture",
+    "onboarding:live-proof": "playwright test --grep @live"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",
@@ -47,6 +51,7 @@
     "fast-xml-parser": "5.11.2",
     "input-otp": "^1.5.0",
     "lucide-react": "^1.49.0",
+    "mammoth": "1.13.0",
     "next": "16.3.6",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.7",
@@ -63,6 +68,7 @@
   },
   "devDependencies": {
     "@neon/config": "1.8.3",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

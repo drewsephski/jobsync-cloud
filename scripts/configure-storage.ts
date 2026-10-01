@@ -5,6 +5,21 @@ try {
   const { storageClient, STORAGE_BUCKET } =
     await import("../lib/storage/client")
   const { serverEnv } = await import("../lib/server-env")
+  const origins = [
+    ...new Set([
+      serverEnv.APP_ORIGIN,
+      ...(process.env.STORAGE_ALLOWED_ORIGINS?.split(",") ?? []),
+    ]),
+  ]
+  for (const origin of origins) {
+    const url = new URL(origin)
+    if (
+      url.origin !== origin ||
+      !["https:", "http:"].includes(url.protocol) ||
+      (url.protocol === "http:" && url.hostname !== "localhost")
+    )
+      throw new Error("invalid_origin")
+  }
   try {
     await storageClient.send(
       new PutBucketCorsCommand({
@@ -12,7 +27,7 @@ try {
         CORSConfiguration: {
           CORSRules: [
             {
-              AllowedOrigins: [serverEnv.APP_ORIGIN],
+              AllowedOrigins: origins,
               AllowedMethods: ["PUT", "GET", "HEAD"],
               // Both are required, signed headers of the create-only PUT request.
               AllowedHeaders: ["content-type", "if-none-match"],
@@ -23,7 +38,7 @@ try {
         },
       })
     )
-    console.log("Storage CORS configured for the application origin.")
+    console.log("Storage CORS configured for the explicit application origins.")
   } finally {
     storageClient.destroy()
   }

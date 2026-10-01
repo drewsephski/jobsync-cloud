@@ -113,7 +113,11 @@ test("real pipeline: 20 replayed/concurrent workers create one draft/charge with
     let calls = 0
     const w = worker(async (text) => {
       calls++
-      assert.equal(text, sanitizedText)
+      // Mammoth preserves DOCX paragraph boundaries as double newlines.
+      assert.equal(
+        text.replace(/\s+/g, " "),
+        sanitizedText.replace(/\s+/g, " ")
+      )
       return success()
     })
     const ensured = await Promise.all(

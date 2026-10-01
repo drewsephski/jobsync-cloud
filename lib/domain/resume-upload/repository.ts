@@ -5,6 +5,7 @@ export function createUploadRepository(db: PrismaClient): UploadRepository {
   return {
     createPending: (upload, title, existingResume) =>
       db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${upload.ownerUserId} FOR NO KEY UPDATE`
         if (existingResume) {
           const resume = await tx.resume.findFirst({
             where: { id: upload.resumeId, ownerUserId: upload.ownerUserId },

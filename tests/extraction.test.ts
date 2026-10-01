@@ -53,11 +53,14 @@ for (const [format, bytes] of [
 test("DOCX preserves text/entities/tables and ignores deleted text and field instructions", async () => {
   const bytes = tinyDocx({
     ...docxEntries,
+    "word/_rels/document.xml.rels":
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdExternal" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.invalid/profile" TargetMode="External"/></Relationships>',
     "word/document.xml":
-      '<w:document xmlns:w="test"><w:body><w:p><w:r><w:t>Alex &amp; Example</w:t><w:tab/><w:t>Resume</w:t></w:r><w:del><w:r><w:delText>Invented Employer</w:delText></w:r></w:del><w:instrText>malicious instructions</w:instrText></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>TypeScript</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>',
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body><w:p><w:r><w:t>Alex &amp; Example</w:t><w:tab/><w:t>Resume</w:t></w:r><w:hyperlink r:id="rIdExternal"><w:r><w:t>Portfolio</w:t></w:r></w:hyperlink><w:del><w:r><w:delText>Invented Employer</w:delText></w:r></w:del><w:instrText>malicious instructions</w:instrText></w:p><w:tbl><w:tr><w:tc><w:p><w:r><w:t>TypeScript</w:t></w:r></w:p></w:tc></w:tr></w:tbl></w:body></w:document>',
   })
   const text = await extractResumeText(bytes, "docx", hash(bytes))
-  assert.equal(text, "Alex & Example\tResume\nTypeScript")
+  assert.equal(text, "Alex & Example\tResumePortfolio\n\nTypeScript")
+  assert.equal(text.includes("example.invalid"), false)
 })
 test("PDF extraction has a terminable deadline", async () => {
   await assert.rejects(validatePdf(resumePdf(), 1, true), {

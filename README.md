@@ -60,9 +60,9 @@ outside the application schema and must remain managed by Neon.
   Existing app profile edits and timestamps are preserved. Concurrent first requests
   return one row under the managed-auth ID; no auth webhooks or migrations are needed.
 - Resume/version and reservation/usage links use ownership-qualified foreign keys.
-  Resume edits create new version snapshots; version content immutability and
-  monotonic allocation beyond the unique positive version number must be enforced
-  by the future application write path. No active-version pointer is introduced yet.
+  Resume edits create immutable snapshots under a resume row lock. Manual versions
+  reference their original AI draft. `Resume.confirmedVersionId` and `confirmedAt`
+  record explicit acceptance; draft status alone never means accepted facts.
 - All timestamps use UTC instants (`timestamptz`). JSON uses JSONB; keywords use a
   Postgres text array. Compensation is whole annual USD; AI cost is integer micro-USD.
 - Run and reservation idempotency keys are globally unique, including service-owned
@@ -90,7 +90,8 @@ Neon Auth is the sole identity provider; its `neon_auth` schema is never modeled
 modified by application migrations. Email/password signup and signin redirect to
 `/dashboard`; server-side signout uses the SDK and redirects to `/auth/sign-in`.
 `/`, `/auth/sign-in`, `/auth/sign-up`, and `/api/auth/*` remain public. Proxy guards
-`/dashboard`, `/onboarding`, and `/account` (the latter two are future routes).
+`/dashboard` and `/onboarding`; `/account` remains deferred. Incomplete users resume
+the durable onboarding step before dashboard access.
 
 Use `getCurrentAuthUser()` from `lib/auth/context.ts` for nullable verified identity
 in future API handlers (return 401 on null), or `requireCurrentAuthUser()` for pages.
@@ -413,4 +414,8 @@ upload/run ownership-qualified foreign keys, the exact SHA-256, extraction/promp
 schema versions, and unique source operation. Full extracted text, prompts and
 responses are not retained or logged. Unknown fields remain null; dates and facts
 are verbatim. Users must review associations and extraction completeness against
-the original file; v1 does not accept or finalize the draft.
+the original file. The onboarding review creates versioned corrections and requires
+explicit confirmation before target preferences can complete account setup.
+
+See [the onboarding handoff](docs/RESUME_ONBOARDING_HANDOFF.md) for state transitions,
+concurrency, parser choices, deployment, and verification.
