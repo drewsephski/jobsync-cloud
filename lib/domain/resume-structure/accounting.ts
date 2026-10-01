@@ -1,3 +1,4 @@
+import { readEntitlement } from "../../billing/entitlements"
 import { randomUUID } from "node:crypto"
 import type {
   Prisma,
@@ -71,13 +72,32 @@ export function createAiAccounting(
             throw new Error("reservation_owner_conflict")
           return existing
         }
+        const entitlement = await readEntitlement(tx, run.ownerUserId!)
+        if (!entitlement.verified)
+          throw new AllowanceError("email_verification_required")
+        if (
+          !entitlement.limits ||
+          !entitlement.periodStart ||
+          !entitlement.periodEnd
+        )
+          throw new AllowanceError("subscription_required")
+        const [featureTotal] = await tx.$queryRaw<{ units: bigint }[]>`
+          SELECT COALESCE(sum(COALESCE("consumedUnits", "reservedUnits")),0)::bigint AS units
+          FROM "AiUsageReservation" WHERE "ownerUserId"=${run.ownerUserId} AND feature=${feature}
+            AND "billingPeriodStart"=${entitlement.periodStart} AND status <> 'released'`
+        const featureLimit =
+          feature === "resume_structure_v1"
+            ? entitlement.limits.resumeRuns
+            : entitlement.limits.jobAnalyses
+        if (featureTotal.units >= BigInt(featureLimit))
+          throw new AllowanceError("allowance_exhausted")
         const [totals] = await tx.$queryRaw<
           { units: bigint; ownerCost: bigint; globalCost: bigint }[]
         >`
         SELECT COALESCE(sum(COALESCE("consumedUnits", "reservedUnits")) FILTER (
-          WHERE "ownerUserId" = ${run.ownerUserId} AND "billingPeriodEnd" > now()),0)::bigint AS units,
+          WHERE "ownerUserId" = ${run.ownerUserId} AND "billingPeriodStart" = ${entitlement.periodStart}),0)::bigint AS units,
         COALESCE(sum(COALESCE("finalCostMicroUsd", "reservedCostMicroUsd")) FILTER (
-          WHERE "ownerUserId" = ${run.ownerUserId} AND ("billingPeriodEnd" > now() OR "finalCostMicroUsd" IS NULL)),0)::bigint AS "ownerCost",
+          WHERE "ownerUserId" = ${run.ownerUserId} AND ("billingPeriodStart" = ${entitlement.periodStart} OR "finalCostMicroUsd" IS NULL)),0)::bigint AS "ownerCost",
         COALESCE(sum(COALESCE("finalCostMicroUsd", "reservedCostMicroUsd")) FILTER (
           WHERE "createdAt" >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR "finalCostMicroUsd" IS NULL),0)::bigint AS "globalCost"
         FROM "AiUsageReservation" WHERE status <> 'released'
@@ -86,14 +106,12 @@ export function createAiAccounting(
           config.reservedCostMicroUsd * BigInt(config.maxPaidAttempts)
         if (
           totals.units + BigInt(1) > policy.ownerMonthlyUnits ||
-          totals.ownerCost + cost > policy.ownerMonthlyCostMicroUsd
+          totals.ownerCost + cost > policy.ownerMonthlyCostMicroUsd ||
+          totals.ownerCost + cost > entitlement.limits.costMicroUsd
         )
           throw new AllowanceError("allowance_exhausted")
         if (totals.globalCost + cost > policy.globalDailyCostMicroUsd)
           throw new AllowanceError("ai_spend_limit")
-        const [period] = await tx.$queryRaw<
-          { start: Date; end: Date }[]
-        >`SELECT date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' AS start, (date_trunc('month', now() AT TIME ZONE 'UTC') + interval '1 month') AT TIME ZONE 'UTC' AS end`
         return tx.aiUsageReservation.create({
           data: {
             ownerUserId: run.ownerUserId!,
@@ -103,8 +121,8 @@ export function createAiAccounting(
             idempotencyKey: run.idempotencyKey,
             reservedUnits: BigInt(1),
             reservedCostMicroUsd: cost,
-            billingPeriodStart: period.start,
-            billingPeriodEnd: period.end,
+            billingPeriodStart: entitlement.periodStart,
+            billingPeriodEnd: entitlement.periodEnd,
             expiresAt: new Date(Date.now() + 120_000),
           },
         })
@@ -124,6 +142,15 @@ export function createAiAccounting(
           where: { id: policyId },
         })
         if (!policy?.enabled) throw new AllowanceError("ai_paused")
+        const entitlement = await readEntitlement(tx, run.ownerUserId!)
+        if (!entitlement.verified)
+          throw new AllowanceError("email_verification_required")
+        if (
+          !entitlement.limits ||
+          reservation.billingPeriodStart?.getTime() !==
+            entitlement.periodStart?.getTime()
+        )
+          throw new AllowanceError("subscription_required")
         if (feature === "job_match_v1") {
           await tx.$executeRaw`SELECT pg_advisory_xact_lock(78234102)`
           const [daily] = await tx.$queryRaw<

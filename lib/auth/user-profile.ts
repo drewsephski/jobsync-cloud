@@ -14,9 +14,12 @@ export async function ensureUserProfile(
     // guarantees a single atomic Postgres upsert. The no-op update preserves
     // app edits and timestamps, and RETURNING works even after a racing insert.
     const [profile] = await database.$queryRaw<UserProfile[]>`
-      INSERT INTO "UserProfile" ("id", "displayName", "createdAt", "updatedAt")
-      VALUES (${user.id}, ${user.name}, now(), now())
-      ON CONFLICT ("id") DO UPDATE SET "id" = EXCLUDED."id"
+      INSERT INTO "UserProfile" ("id", "displayName", "emailVerifiedAt", "trialStartedAt", "trialEndsAt", "createdAt", "updatedAt")
+      VALUES (${user.id}, ${user.name}, CASE WHEN ${user.emailVerified === true} THEN now() END, CASE WHEN ${user.emailVerified === true} THEN now() END, CASE WHEN ${user.emailVerified === true} THEN now() + interval '14 days' END, now(), now())
+      ON CONFLICT ("id") DO UPDATE SET
+        "emailVerifiedAt" = CASE WHEN ${user.emailVerified === true} THEN COALESCE("UserProfile"."emailVerifiedAt", now()) ELSE NULL END,
+        "trialStartedAt" = CASE WHEN ${user.emailVerified === true} THEN COALESCE("UserProfile"."trialStartedAt", now()) ELSE "UserProfile"."trialStartedAt" END,
+        "trialEndsAt" = CASE WHEN ${user.emailVerified === true} THEN COALESCE("UserProfile"."trialEndsAt", now() + interval '14 days') ELSE "UserProfile"."trialEndsAt" END
       RETURNING *
     `
     if (!profile) throw new Error("Missing profile")

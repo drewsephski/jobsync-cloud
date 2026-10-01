@@ -27,21 +27,25 @@ export async function readResumeStructureStatus(
   if (run?.status === "failed" || run?.status === "canceled") {
     const code = run.errorCode
     const message =
-      code === "no_extractable_text"
-        ? "No readable text was found. Export a text-based PDF or DOCX; scanned documents are not supported yet."
-        : code === "text_too_large"
-          ? "This resume contains too much text. Upload a shorter resume."
-          : code === "provider_outcome_unknown"
-            ? "Processing stopped while confirming an AI request. Its usage requires reconciliation; requests without a provider receipt need operator review. No automatic paid retry will run."
-            : code === "draft_commit_interrupted"
-              ? "The AI request completed, but its draft could not be saved. Usage is recorded; no automatic paid retry will run."
-              : code === "allowance_exhausted"
-                ? "Your current resume-processing allowance is exhausted."
-                : ["ai_paused", "ai_spend_limit"].includes(code ?? "")
-                  ? "Resume structuring is temporarily paused."
-                  : code === "invalid_model_output"
-                    ? "The draft did not pass factual validation. Your original file remains available."
-                    : "Resume structuring could not finish. Your original file remains available."
+      code === "email_verification_required"
+        ? "Verify your email in Account & billing to use resume AI."
+        : code === "subscription_required"
+          ? "Your trial or subscription ended. Open Account & billing to continue processing."
+          : code === "no_extractable_text"
+            ? "No readable text was found. Export a text-based PDF or DOCX; scanned documents are not supported yet."
+            : code === "text_too_large"
+              ? "This resume contains too much text. Upload a shorter resume."
+              : code === "provider_outcome_unknown"
+                ? "Processing stopped while confirming an AI request. Its usage requires reconciliation; requests without a provider receipt need operator review. No automatic paid retry will run."
+                : code === "draft_commit_interrupted"
+                  ? "The AI request completed, but its draft could not be saved. Usage is recorded; no automatic paid retry will run."
+                  : code === "allowance_exhausted"
+                    ? "Your current resume-processing allowance is exhausted."
+                    : ["ai_paused", "ai_spend_limit"].includes(code ?? "")
+                      ? "Resume structuring is temporarily paused."
+                      : code === "invalid_model_output"
+                        ? "The draft did not pass factual validation. Your original file remains available."
+                        : "Resume structuring could not finish. Your original file remains available."
     return { state: "failed" as const, message, draft: null }
   }
   return {

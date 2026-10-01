@@ -1,3 +1,4 @@
+import { trialFields } from "./billing-fixtures"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { after, test } from "node:test"
@@ -47,7 +48,12 @@ async function fixture() {
   const ownerId = `onboarding-test-${randomUUID()}`
   const otherId = `onboarding-test-${randomUUID()}`
   try {
-    await db.userProfile.createMany({ data: [{ id: ownerId }, { id: otherId }] })
+    await db.userProfile.createMany({
+      data: [
+        { id: ownerId, ...trialFields() },
+        { id: otherId, ...trialFields() },
+      ],
+    })
     const user = await authUser(ownerId)
     const other = await authUser(otherId)
     const resume = await db.resume.create({
@@ -165,9 +171,11 @@ async function addAiDraft(
       resumeId: f.resume.id,
       objectKey: `test/${randomUUID()}`,
       originalFileName: options.fileName,
-      declaredContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      declaredContentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       declaredSizeBytes: 128,
-      actualContentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      actualContentType:
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       actualSizeBytes: BigInt(128),
       status: "uploaded",
       expiresAt: new Date(Date.now() + 60_000),
@@ -459,7 +467,10 @@ test("foreign resume versions cannot be confirmed or used to write preferences",
       }),
       assertServiceError("resume_not_found")
     )
-    assert.equal(await db.targetPreference.count({ where: { ownerUserId: f.ownerId } }), 0)
+    assert.equal(
+      await db.targetPreference.count({ where: { ownerUserId: f.ownerId } }),
+      0
+    )
   } finally {
     await db.resumeVersion.deleteMany({ where: { ownerUserId: f.otherId } })
     await db.resume.deleteMany({ where: { ownerUserId: f.otherId } })
@@ -471,28 +482,31 @@ test("strict inputs reject forged owner fields", async () => {
   const f = await fixture()
   try {
     assert.throws(
-      () => f.service.save(f.user, {
-        ownerUserId: f.otherId,
-        expectedVersionId: f.original.id,
-        data: editedData(),
-      }),
+      () =>
+        f.service.save(f.user, {
+          ownerUserId: f.otherId,
+          expectedVersionId: f.original.id,
+          data: editedData(),
+        }),
       assertServiceError("invalid_input")
     )
     assert.throws(
-      () => f.service.confirm(f.user, {
-        ownerUserId: f.otherId,
-        expectedVersionId: f.original.id,
-      }),
+      () =>
+        f.service.confirm(f.user, {
+          ownerUserId: f.otherId,
+          expectedVersionId: f.original.id,
+        }),
       assertServiceError("invalid_input")
     )
     assert.throws(
-      () => f.service.preferences(f.user, {
-        ownerUserId: f.otherId,
-        expectedVersionId: f.original.id,
-        expectedRevision: 0,
-        targets: [target("Engineer")],
-        complete: true,
-      }),
+      () =>
+        f.service.preferences(f.user, {
+          ownerUserId: f.otherId,
+          expectedVersionId: f.original.id,
+          expectedRevision: 0,
+          targets: [target("Engineer")],
+          complete: true,
+        }),
       assertServiceError("invalid_input")
     )
   } finally {
@@ -503,7 +517,9 @@ test("strict inputs reject forged owner fields", async () => {
 test("editing accepted resume preserves consent until the new version is reconfirmed", async () => {
   const f = await fixture()
   try {
-    const confirmed = await f.service.confirm(f.user, { expectedVersionId: f.original.id })
+    const confirmed = await f.service.confirm(f.user, {
+      expectedVersionId: f.original.id,
+    })
     const acceptedAt = confirmed.version?.confirmedAt
     const accepted = await f.service.save(f.user, {
       expectedVersionId: f.original.id,
@@ -513,15 +529,24 @@ test("editing accepted resume preserves consent until the new version is reconfi
     assert.equal(accepted.version?.confirmed, false)
     assert.equal(accepted.step, "review")
     assert.equal(
-      (await db.resume.findUniqueOrThrow({ where: { id: f.resume.id } })).confirmedVersionId,
+      (await db.resume.findUniqueOrThrow({ where: { id: f.resume.id } }))
+        .confirmedVersionId,
       f.original.id
     )
-    assert.equal((await db.resume.findUniqueOrThrow({ where: { id: f.resume.id } })).confirmedAt?.toISOString(), acceptedAt)
-    const reconfirmed = await f.service.confirm(f.user, { expectedVersionId: accepted.version!.id })
+    assert.equal(
+      (
+        await db.resume.findUniqueOrThrow({ where: { id: f.resume.id } })
+      ).confirmedAt?.toISOString(),
+      acceptedAt
+    )
+    const reconfirmed = await f.service.confirm(f.user, {
+      expectedVersionId: accepted.version!.id,
+    })
     assert.equal(reconfirmed.version?.confirmed, true)
     assert.equal(reconfirmed.step, "preferences")
     assert.equal(
-      (await db.resume.findUniqueOrThrow({ where: { id: f.resume.id } })).confirmedVersionId,
+      (await db.resume.findUniqueOrThrow({ where: { id: f.resume.id } }))
+        .confirmedVersionId,
       accepted.version!.id
     )
   } finally {
@@ -537,7 +562,10 @@ test("saving unchanged content is a no-op and blank names cannot be confirmed", 
       data: editableContent(structuredClone(sanitizedResume)),
     })
     assert.equal(unchanged.version?.id, f.original.id)
-    assert.equal(await db.resumeVersion.count({ where: { ownerUserId: f.ownerId } }), 1)
+    assert.equal(
+      await db.resumeVersion.count({ where: { ownerUserId: f.ownerId } }),
+      1
+    )
     const blankName = editedData()
     blankName.contact.name = "   "
     const saved = await f.service.save(f.user, {
@@ -571,14 +599,23 @@ test("late AI completion keeps latest upload lineage and new edits use global ve
     assert.equal(state.upload?.id, newer.upload.id)
     assert.equal(state.version?.id, newer.version.id)
     assert.equal(state.original?.id, newer.version.id)
-    assert.ok(state.history.some((row) => row.id === lateOlderCompletion.version.id))
+    assert.ok(
+      state.history.some((row) => row.id === lateOlderCompletion.version.id)
+    )
     const edited = await f.service.save(f.user, {
       expectedVersionId: newer.version.id,
       data: editedData(),
     })
     assert.equal(edited.version?.version, 4)
     assert.equal(edited.original?.id, newer.version.id)
-    assert.equal(edited.version?.id, (await db.resumeVersion.findFirstOrThrow({ where: { id: edited.version!.id } })).id)
+    assert.equal(
+      edited.version?.id,
+      (
+        await db.resumeVersion.findFirstOrThrow({
+          where: { id: edited.version!.id },
+        })
+      ).id
+    )
   } finally {
     await f.cleanup()
   }
@@ -628,40 +665,51 @@ test("NO KEY UPDATE profile locking lets the worker insert an AI version while i
       },
     })
     profileTransaction = db.$transaction(async (tx) => {
-      await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM "UserProfile" WHERE id = ${f.ownerId} FOR NO KEY UPDATE`
+      await tx.$queryRaw<
+        Array<{ id: string }>
+      >`SELECT id FROM "UserProfile" WHERE id = ${f.ownerId} FOR NO KEY UPDATE`
       markProfileLocked()
       await profileRelease
     })
     await Promise.race([
       profileLocked,
       profileTransaction.then(() => {
-        throw new Error("Profile transaction ended before its lock was released")
+        throw new Error(
+          "Profile transaction ended before its lock was released"
+        )
       }),
     ])
 
     const versionId = await db.$transaction(async (tx) => {
       await tx.$executeRaw`SET LOCAL lock_timeout = '4s'`
       await tx.$queryRaw`SELECT id FROM "Resume" WHERE id = ${f.resume.id}::uuid AND "ownerUserId" = ${f.ownerId} FOR UPDATE`
-      return (await tx.resumeVersion.create({
-        data: {
-          ownerUserId: f.ownerId,
-          resumeId: f.resume.id,
-          version: 2,
-          source: "upload",
-          status: "draft",
-          sourceUploadId: upload.id,
-          processingRunId: run.id,
-          sourceSha256: sha256,
-          extractionVersion: "test-extract-v1",
-          promptVersion: "test-prompt-v1",
-          schemaVersion: "resume-v1",
-          data: structuredClone(sanitizedResume),
-        },
-        select: { id: true },
-      })).id
+      return (
+        await tx.resumeVersion.create({
+          data: {
+            ownerUserId: f.ownerId,
+            resumeId: f.resume.id,
+            version: 2,
+            source: "upload",
+            status: "draft",
+            sourceUploadId: upload.id,
+            processingRunId: run.id,
+            sourceSha256: sha256,
+            extractionVersion: "test-extract-v1",
+            promptVersion: "test-prompt-v1",
+            schemaVersion: "resume-v1",
+            data: structuredClone(sanitizedResume),
+          },
+          select: { id: true },
+        })
+      ).id
     })
     assert.match(versionId, /^[0-9a-f-]{36}$/i)
-    assert.equal(await db.resumeVersion.count({ where: { ownerUserId: f.ownerId, version: 2 } }), 1)
+    assert.equal(
+      await db.resumeVersion.count({
+        where: { ownerUserId: f.ownerId, version: 2 },
+      }),
+      1
+    )
   } finally {
     releaseProfile()
     await profileTransaction?.catch(() => undefined)

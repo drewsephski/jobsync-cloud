@@ -1,3 +1,4 @@
+import { readEntitlement, requireEntitlement } from "../../billing/entitlements"
 import { z } from "zod"
 import type { PrismaClient } from "../../generated/prisma/client"
 import type { CurrentAuthUser } from "../../auth/session-context"
@@ -36,6 +37,7 @@ export function createDiscoveryService(db: PrismaClient) {
     return db.$transaction(
       async (tx) => {
         const input = await profileInputs(tx, user.id)
+        const entitlement = await readEntitlement(tx, user.id)
         const watches = await tx.companyWatch.findMany({
           where: { ownerUserId: user.id },
           include: { board: { include: { company: true } } },
@@ -155,6 +157,7 @@ export function createDiscoveryService(db: PrismaClient) {
           errorCode: b.errorCode,
         })
         return {
+          watchLimit: entitlement.limits?.watches ?? 0,
           ready: !!input,
           preferenceRevision: input?.profile.preferenceRevision ?? 0,
           targets:
@@ -215,6 +218,7 @@ export function createDiscoveryService(db: PrismaClient) {
     const action = parsed.data
     await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${user.id} FOR NO KEY UPDATE`
+      const entitlement = await requireEntitlement(tx, user.id)
       const profile = await tx.userProfile.findUniqueOrThrow({
         where: { id: user.id },
       })
@@ -235,7 +239,7 @@ export function createDiscoveryService(db: PrismaClient) {
             !existing &&
             (await tx.companyWatch.count({
               where: { ownerUserId: user.id },
-            })) >= 30
+            })) >= entitlement.limits!.watches
           )
             throw new UploadError("watch_limit", 409)
           await tx.companyWatch.upsert({

@@ -1,3 +1,4 @@
+import { trialFields } from "./billing-fixtures"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { after, test } from "node:test"
@@ -59,10 +60,11 @@ async function fixture() {
     data: [
       {
         id: ids.owner,
+        ...trialFields(),
         timezone: "America/Los_Angeles",
         onboardingCompletedAt: new Date(),
       },
-      { id: ids.other, onboardingCompletedAt: new Date() },
+      { id: ids.other, ...trialFields(), onboardingCompletedAt: new Date() },
     ],
   })
   try {

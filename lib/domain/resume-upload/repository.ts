@@ -1,3 +1,4 @@
+import { requireEntitlement } from "../../billing/entitlements"
 import type { PrismaClient } from "../../generated/prisma/client"
 import { UploadError, type UploadRepository } from "./service"
 
@@ -6,6 +7,7 @@ export function createUploadRepository(db: PrismaClient): UploadRepository {
     createPending: (upload, title, existingResume) =>
       db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${upload.ownerUserId} FOR NO KEY UPDATE`
+        await requireEntitlement(tx, upload.ownerUserId)
         if (existingResume) {
           const resume = await tx.resume.findFirst({
             where: { id: upload.resumeId, ownerUserId: upload.ownerUserId },

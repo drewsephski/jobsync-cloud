@@ -7,6 +7,7 @@ export type CurrentAuthUser = Readonly<{
   id: string
   name: string | null
   email: string | null
+  emailVerified?: boolean
   [verifiedSession]: true
 }>
 
@@ -14,6 +15,7 @@ const userSchema = z.object({
   id: z.string().min(1),
   name: z.string().nullish(),
   email: z.email().nullish(),
+  emailVerified: z.boolean().default(false),
 })
 
 // Internal dependency seam for testing the session boundary without a provider.
@@ -32,9 +34,14 @@ export function createSessionContext(
     if (result.data === null) return null
     const session = z.object({ user: userSchema }).safeParse(result.data)
     if (!session.success) throw new Error("Invalid authenticated session")
-    const { id, name, email } = session.data.user
+    const { id, name, email, emailVerified } = session.data.user
     // Only this verified-session boundary produces the branded identity.
-    return { id, name: name ?? null, email: email ?? null } as CurrentAuthUser
+    return {
+      id,
+      name: name ?? null,
+      email: email ?? null,
+      emailVerified,
+    } as CurrentAuthUser
   }
 
   async function requireCurrentAuthUser(): Promise<CurrentAuthUser> {

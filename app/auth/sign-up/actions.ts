@@ -6,7 +6,7 @@ import { z } from "zod"
 
 const schema = z.object({
   email: z.email(),
-  password: z.string().min(1).max(128),
+  password: z.string().min(12).max(128),
   name: z.string().trim().min(1).max(200),
 })
 
@@ -31,5 +31,5 @@ export async function signUpWithEmail(
   } catch {
     return { error: "Authentication service unavailable. Please try again." }
   }
-  redirect("/dashboard")
+  redirect("/auth/verify")
 }

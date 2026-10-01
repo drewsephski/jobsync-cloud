@@ -1,3 +1,4 @@
+import { requireCoreEntitlement } from "../../billing/entitlements"
 import type { CurrentAuthUser } from "../../auth/session-context"
 import type { Prisma, PrismaClient } from "../../generated/prisma/client"
 import { UploadError } from "../resume-upload/service"
@@ -121,6 +122,7 @@ export function createOnboardingService(db: PrismaClient) {
       Array<{ id: string }>
     >`SELECT id FROM "UserProfile" WHERE id = ${user.id} FOR NO KEY UPDATE`
     if (!rows.length) throw new UploadError("profile_not_found", 404)
+    await requireCoreEntitlement(tx, user.id)
   }
   async function lockCurrent(
     tx: Transaction,

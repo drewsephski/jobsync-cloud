@@ -1,3 +1,4 @@
+import { trialFields } from "./billing-fixtures"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { after, test } from "node:test"
@@ -46,7 +47,12 @@ async function expectRejectedWrite(
 async function createOwners(tx: Prisma.TransactionClient) {
   const first = `storage-test-${randomUUID()}`
   const second = `storage-test-${randomUUID()}`
-  await tx.userProfile.createMany({ data: [{ id: first }, { id: second }] })
+  await tx.userProfile.createMany({
+    data: [
+      { id: first, ...trialFields() },
+      { id: second, ...trialFields() },
+    ],
+  })
   return { first, second }
 }
 
@@ -171,7 +177,12 @@ test("production repository creates an upload for the requested owner and denies
   const ownerB = `storage-repo-test-${randomUUID()}`
   const resumeId = randomUUID()
   const uploadId = randomUUID()
-  await db.userProfile.createMany({ data: [{ id: ownerA }, { id: ownerB }] })
+  await db.userProfile.createMany({
+    data: [
+      { id: ownerA, ...trialFields() },
+      { id: ownerB, ...trialFields() },
+    ],
+  })
   try {
     const resume = await db.resume.create({
       data: { id: resumeId, ownerUserId: ownerA, title: "Owned resume" },
@@ -221,7 +232,7 @@ test("production repository creates an upload for the requested owner and denies
 
 test("concurrent Postgres completion settles one upload and preserves winning metadata", async () => {
   const ownerId = `storage-race-test-${randomUUID()}`
-  await db.userProfile.create({ data: { id: ownerId } })
+  await db.userProfile.create({ data: { id: ownerId, ...trialFields() } })
   const user = await createSessionContext(
     async () => ({
       data: { user: { id: ownerId, name: "Race test", email: null } },
@@ -320,7 +331,7 @@ test("concurrent Postgres completion settles one upload and preserves winning me
 
 test("Postgres durably rejects objects above the signed 32-bit size range", async () => {
   const ownerId = `storage-large-test-${randomUUID()}`
-  await db.userProfile.create({ data: { id: ownerId } })
+  await db.userProfile.create({ data: { id: ownerId, ...trialFields() } })
   const user = await createSessionContext(
     async () => ({
       data: { user: { id: ownerId, name: "Large object test", email: null } },

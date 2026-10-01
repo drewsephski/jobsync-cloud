@@ -135,9 +135,13 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
         throw new Error(
           result.error === "preferences_conflict"
             ? "Your preferences changed in another tab. Refresh and try again."
-            : result.error === "watch_limit"
-              ? "You can monitor up to 30 company boards. Remove one to add another."
-              : "Could not save your change. Please try again."
+            : result.error === "subscription_required"
+              ? "Your trial or subscription ended. Open Account & billing to continue."
+              : result.error === "email_verification_required"
+                ? "Verify your email in Account & billing to start your trial."
+                : result.error === "watch_limit"
+                  ? "You can monitor up to 30 company boards. Remove one to add another."
+                  : "Could not save your change. Please try again."
         )
       }
       setData(await request(query, filter))
@@ -401,7 +405,9 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               <Building2 className="size-5" /> Companies
             </CardTitle>
             <CardDescription>
-              Watch up to 30 public company boards.
+              {data.watchLimit > 0
+                ? `Watch up to ${data.watchLimit} public company boards.`
+                : "Upgrade to watch public company boards."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">

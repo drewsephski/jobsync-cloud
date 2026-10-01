@@ -6,18 +6,24 @@ export default defineConfig({
     discoveryworker: {
       name: "Shared job discovery worker",
       source: "./functions/discovery-worker.ts",
-      env: process.env.OPENROUTER_API_KEY
-        ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
-        : undefined,
+      env: {
+        STRIPE_MODE: process.env.STRIPE_MODE ?? "live",
+        ...(process.env.OPENROUTER_API_KEY
+          ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
+          : {}),
+      },
       dev: { port: 8788 },
     },
     resumeworker: {
       name: "Resume processing worker",
       source: "./functions/resume-worker.ts",
       externalPackages: ["unpdf", "fast-xml-parser", "mammoth"],
-      env: process.env.OPENROUTER_API_KEY
-        ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
-        : undefined,
+      env: {
+        STRIPE_MODE: process.env.STRIPE_MODE ?? "live",
+        ...(process.env.OPENROUTER_API_KEY
+          ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
+          : {}),
+      },
       dev: { port: 8787 },
     },
   },

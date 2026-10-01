@@ -33,6 +33,10 @@ export async function onboardingRequest(
 }
 export function onboardingError(error: unknown) {
   if (error instanceof OnboardingRequestError) {
+    if (error.code === "subscription_required")
+      return "Your trial or subscription ended. Open Account & billing to continue. Your saved resume is still available."
+    if (error.code === "email_verification_required")
+      return "Verify your email in Account & billing to start your trial."
     if (error.status === 409)
       return "This resume or your preferences changed in another tab or device. Your unsaved changes are still here. Load the latest saved version before continuing."
     if (error.status === 401)

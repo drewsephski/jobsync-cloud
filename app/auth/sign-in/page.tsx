@@ -67,6 +67,13 @@ export default function SignInForm() {
           </FieldGroup>
         </form>
         <Button
+          variant="neutral"
+          nativeButton={false}
+          render={<Link href="/auth/forgot-password" />}
+        >
+          Forgot password?
+        </Button>
+        <Button
           className="mt-6"
           variant="neutral"
           nativeButton={false}

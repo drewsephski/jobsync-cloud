@@ -26,7 +26,9 @@ export default function SignUpForm() {
     <Card>
       <CardHeader>
         <CardTitle>Create new account</CardTitle>
-        <CardDescription>Enter your details to get started.</CardDescription>
+        <CardDescription>
+          Start a 14-day trial after verifying your email. No card required.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction}>
@@ -62,8 +64,9 @@ export default function SignUpForm() {
                 name="password"
                 type="password"
                 autoComplete="new-password"
+                minLength={12}
                 required
-                placeholder="*****"
+                placeholder="At least 12 characters"
               />
             </Field>
 

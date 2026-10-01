@@ -2,17 +2,21 @@ import type { ApplicationsData } from "@/lib/domain/applications/service"
 export class ApplicationApiError extends Error {
   constructor(public code: string) {
     super(
-      code === "application_conflict"
-        ? "This application changed in another tab. Your edits are still here. Load the latest version before saving again."
-        : code === "resume_not_confirmed"
-          ? "That resume version is no longer confirmed. Choose a confirmed resume and try again."
-          : code === "application_date_required"
-            ? "Add the date you applied."
-            : code === "future_application_date"
-              ? "Application dates must be today or earlier. Use a follow-up date for a planned next step."
-              : code === "future_transition"
-                ? "Movement dates must be today or earlier. Use a follow-up date for upcoming activity."
-                : "Could not save your application. Please try again."
+      code === "subscription_required"
+        ? "Your trial or subscription ended. Open Account & billing to continue. Your saved applications are still available."
+        : code === "email_verification_required"
+          ? "Verify your email in Account & billing to start your trial."
+          : code === "application_conflict"
+            ? "This application changed in another tab. Your edits are still here. Load the latest version before saving again."
+            : code === "resume_not_confirmed"
+              ? "That resume version is no longer confirmed. Choose a confirmed resume and try again."
+              : code === "application_date_required"
+                ? "Add the date you applied."
+                : code === "future_application_date"
+                  ? "Application dates must be today or earlier. Use a follow-up date for a planned next step."
+                  : code === "future_transition"
+                    ? "Movement dates must be today or earlier. Use a follow-up date for upcoming activity."
+                    : "Could not save your application. Please try again."
     )
   }
 }

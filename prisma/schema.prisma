@@ -56,6 +56,9 @@ model UserProfile {
   onboardingCompletedAt DateTime? @db.Timestamptz(3)
   preferenceRevision    Int       @default(0)
   discoveryCursor       String?   @db.Uuid
+  emailVerifiedAt       DateTime? @db.Timestamptz(3)
+  trialStartedAt        DateTime? @db.Timestamptz(3)
+  trialEndsAt           DateTime? @db.Timestamptz(3)
   discoveryInputKey     String?
   createdAt             DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
@@ -71,6 +74,8 @@ model UserProfile {
   jobMatches JobMatch[]
   jobStates UserJobState[]
   applications Application[]
+  billingCustomers BillingCustomer[]
+  discoveryAllowances DiscoveryAllowance[]
 }
 
 model Resume {
@@ -464,4 +469,54 @@ model ApplicationEvent {
 
   @@unique([applicationId, revision])
   @@index([ownerUserId, createdAt])
+}
+
+// Billing provenance is application-owned and explicitly separated by Stripe mode.
+model BillingCustomer {
+  id String @id @default(uuid()) @db.Uuid
+  ownerUserId String
+  livemode Boolean
+  stripeCustomerId String? @unique
+  checkoutAttempt Int @default(0)
+  checkoutSessionId String?
+  checkoutUrl String?
+  checkoutExpiresAt DateTime? @db.Timestamptz(3)
+  reconciledAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  subscriptions BillingSubscription[]
+  @@unique([ownerUserId, livemode])
+}
+model BillingSubscription {
+  stripeSubscriptionId String @id
+  customerId String @db.Uuid
+  stripePriceId String
+  status String
+  eligible Boolean @default(false)
+  currentPeriodStart DateTime @db.Timestamptz(3)
+  currentPeriodEnd DateTime @db.Timestamptz(3)
+  cancelAtPeriodEnd Boolean @default(false)
+  stripeCreatedAt DateTime @db.Timestamptz(3)
+  lastEventId String
+  reconciledAt DateTime @db.Timestamptz(3)
+  customer BillingCustomer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  @@index([customerId, status])
+}
+// Stored only after a successful canonical reconciliation; failed work remains retryable.
+model BillingWebhookEvent {
+  id String @id
+  livemode Boolean
+  type String
+  stripeCreatedAt DateTime @db.Timestamptz(3)
+  customerId String?
+  processedAt DateTime @default(now()) @db.Timestamptz(3)
+}
+model DiscoveryAllowance {
+  ownerUserId String
+  periodStart DateTime @db.Timestamptz(3)
+  scans Int @default(0)
+  lastScannedAt DateTime @default(now()) @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  @@id([ownerUserId, periodStart])
 }

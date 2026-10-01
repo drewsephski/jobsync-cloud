@@ -1,3 +1,7 @@
+import {
+  discoveryEligibleOwner,
+  readEntitlement,
+} from "../../billing/entitlements"
 import { randomUUID } from "node:crypto"
 import type {
   Prisma,
@@ -46,7 +50,11 @@ export function createDiscoveryWorker(
           id: boardId,
           enabled: true,
           nextFetchAt: { lte: new Date() },
-          watches: { some: {} },
+          watches: {
+            some: {
+              owner: discoveryEligibleOwner(),
+            },
+          },
         },
       })
       if (!board) return null
@@ -85,7 +93,9 @@ export function createDiscoveryWorker(
       })
       if (
         !board.enabled ||
-        !(await db.companyWatch.findFirst({ where: { boardId: board.id } }))
+        !(await db.companyWatch.findFirst({
+          where: { boardId: board.id, owner: discoveryEligibleOwner() },
+        }))
       )
         return runs.finish(run, "canceled", null)
       const jobs = await fetcher(board)
@@ -175,11 +185,36 @@ export function createDiscoveryWorker(
     return db.$transaction(
       async (tx) => {
         await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${ownerUserId} FOR NO KEY UPDATE`
+        const entitlement = await readEntitlement(tx, ownerUserId)
+        if (!entitlement.verified || !entitlement.limits)
+          return { considered: 0, eligible: 0, queued: 0 }
+        const periodStart = new Date(
+          new Date().toISOString().slice(0, 10) + "T00:00:00Z"
+        )
+        const allowance = await tx.discoveryAllowance.findUnique({
+          where: { ownerUserId_periodStart: { ownerUserId, periodStart } },
+        })
+        const latestScan = await tx.discoveryAllowance.findFirst({
+          where: { ownerUserId },
+          orderBy: { lastScannedAt: "desc" },
+        })
+        if (
+          (allowance?.scans ?? 0) >= entitlement.limits.dailyScans ||
+          (latestScan &&
+            Date.now() - latestScan.lastScannedAt.getTime() < 12 * 3600_000)
+        )
+          return { considered: 0, eligible: 0, queued: 0 }
         const input = await profileInputs(tx, ownerUserId)
         if (!input) return { considered: 0, eligible: 0, queued: 0 }
+        await tx.discoveryAllowance.upsert({
+          where: { ownerUserId_periodStart: { ownerUserId, periodStart } },
+          create: { ownerUserId, periodStart, scans: 1 },
+          update: { scans: { increment: 1 }, lastScannedAt: new Date() },
+        })
         const watched = await tx.companyWatch.findMany({
           where: { ownerUserId },
           orderBy: { boardId: "asc" },
+          take: entitlement.limits.watches,
         })
         const scanKey = fingerprint([
           input.version.id,
@@ -195,6 +230,7 @@ export function createDiscoveryWorker(
         const page = await tx.jobPosting.findMany({
           where: {
             open: true,
+            boardId: { in: watched.map((w) => w.boardId) },
             ...(cursor ? { id: { gt: cursor } } : {}),
             board: { enabled: true, watches: { some: { ownerUserId } } },
           },

@@ -17,7 +17,8 @@ export default function Home() {
             JobSync Cloud
           </EmptyTitle>
           <EmptyDescription>
-            A home for your job search. Account setup is available now.
+            A home for your job search. Try it free for 14 days, then continue
+            with Plus for $6/month.
           </EmptyDescription>
         </EmptyHeader>
         <EmptyContent>
@@ -37,6 +38,13 @@ export default function Home() {
             render={<Link href="/dashboard" />}
           >
             Dashboard
+          </Button>
+          <Button
+            variant="neutral"
+            nativeButton={false}
+            render={<Link href="/pricing" />}
+          >
+            See pricing
           </Button>
         </EmptyContent>
       </Empty>

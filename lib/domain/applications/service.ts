@@ -1,3 +1,4 @@
+import { requireCoreEntitlement } from "../../billing/entitlements"
 import { randomUUID } from "node:crypto"
 import type { PrismaClient, Prisma } from "../../generated/prisma/client"
 import type { CurrentAuthUser } from "../../auth/session-context"
@@ -134,6 +135,7 @@ export function createApplicationService(db: PrismaClient) {
     return db.$transaction(async (tx) => {
       // Same lock order as onboarding/discovery: serializes conversion and resume confirmation.
       await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id=${user.id} FOR NO KEY UPDATE`
+      await requireCoreEntitlement(tx, user.id)
       const profile = await tx.userProfile.findUniqueOrThrow({
         where: { id: user.id },
       })

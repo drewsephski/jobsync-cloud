@@ -37,6 +37,7 @@ test("identity comes only from the verified session and excludes tokens", async 
     id: "verified-owner",
     name: "Actual name",
     email: "actual@example.com",
+    emailVerified: false,
   })
   const another = await contextFor({
     user: { id: "another-owner" },
@@ -209,13 +210,13 @@ const { signInWithEmail } = await import("../app/auth/sign-in/actions")
 const { signUpWithEmail } = await import("../app/auth/sign-up/actions")
 const { signOut } = await import("../app/auth/actions")
 
-test("successful signin/signup target dashboard; signout targets signin", async () => {
+test("successful signup targets verification; signin targets dashboard; signout targets signin", async () => {
   const form = new FormData()
   form.set("email", "test@example.com")
   form.set("password", "valid-password")
   form.set("name", "Test")
   await assert.rejects(signInWithEmail(null, form), /redirect:\/dashboard/)
-  await assert.rejects(signUpWithEmail(null, form), /redirect:\/dashboard/)
+  await assert.rejects(signUpWithEmail(null, form), /redirect:\/auth\/verify/)
   await assert.rejects(signOut(), /redirect:\/auth\/sign-in/)
 })
 

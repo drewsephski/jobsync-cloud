@@ -1,3 +1,4 @@
+import { trialFields } from "./billing-fixtures"
 import assert from "node:assert/strict"
 import { randomUUID } from "node:crypto"
 import { after, test } from "node:test"
@@ -28,7 +29,7 @@ import { readResumeStructureStatus } from "../lib/domain/resume-structure/status
 nextEnv.loadEnvConfig(process.cwd())
 assert.ok(
   new URL(process.env.DATABASE_URL!).hostname.startsWith(
-    "ep-green-scene-b45djevq"
+    "ep-weathered-meadow-b46q35cx"
   )
 )
 const db = createDatabaseClient(process.env.DATABASE_URL!)
@@ -68,7 +69,7 @@ async function fixture(
   }) => Promise<void>
 ) {
   const owner = `ai-test-${randomUUID()}`
-  await db.userProfile.create({ data: { id: owner } })
+  await db.userProfile.create({ data: { id: owner, ...trialFields() } })
   try {
     const resume = await db.resume.create({
       data: { ownerUserId: owner, title: "Sanitized" },
@@ -202,7 +203,7 @@ test("reservation races: concurrent admission never exceeds monthly allowance an
     const results = await Promise.allSettled(
       created.map((row) => accounting.reserve(row))
     )
-    assert.equal(results.filter((row) => row.status === "fulfilled").length, 9)
+    assert.equal(results.filter((row) => row.status === "fulfilled").length, 1)
     for (const result of results)
       if (result.status === "rejected")
         assert.equal(
