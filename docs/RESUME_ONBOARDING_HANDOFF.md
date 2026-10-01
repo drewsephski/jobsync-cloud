@@ -99,7 +99,7 @@ The web deployment does not receive the worker's OpenRouter API key.
 - Full suite: 120/120 server tests passed; lint has zero errors and two unchanged
   primitive warnings. TypeScript, schema validation, migration status (none pending),
   local build and Vercel build passed.
-- Fixture browser: passed, including version conflicts, preservation of preferences
+- Fixture browser: passed locally and against production, including version conflicts, preservation of preferences
   when returning to resume review, mobile width 390, keyboard operation, refresh,
   completion and direct routes; zero provider calls.
 - Production browser at `https://jobsync-cloud.vercel.app`: complete real signup →

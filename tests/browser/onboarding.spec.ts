@@ -197,6 +197,7 @@ async function resumeAndPreferences(
   await expect(page.getByLabel("Full name", { exact: true })).toHaveValue(
     "Alex Example"
   )
+  await expect(page.getByLabel("Full name", { exact: true })).toBeVisible()
   await page.screenshot({
     path: "output/playwright/resume-review-desktop.png",
     fullPage: true,
@@ -296,6 +297,7 @@ async function resumeAndPreferences(
   await expect(page.getByLabel("Target title 2", { exact: true })).toHaveValue(
     "Platform Engineer"
   )
+  await expect(page.getByLabel("Target title 2", { exact: true })).toBeVisible()
   await expect(page.getByLabel("Locations", { exact: true })).toHaveValue(
     "Chicago, Austin"
   )
