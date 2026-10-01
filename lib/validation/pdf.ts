@@ -16,24 +16,40 @@ console.log = console.warn = console.error = () => {};
     });
     if (await document.getPermissions() !== null) throw { name: "PasswordException" };
     if (!document.numPages || document.numPages > workerData.maxPages) throw { name: "InvalidPDFException" };
+    let text = "";
     for (let i = 1; i <= document.numPages; i++) {
       const page = await document.getPage(i);
       await page.getOperatorList();
+      if (workerData.extract) {
+        const content = await page.getTextContent();
+        for (const item of content.items) {
+          if (typeof item.str === "string") text += item.str + (item.hasEOL ? "\\n" : " ");
+          if (text.length > workerData.maxChars) throw { name: "TextLimit" };
+        }
+        text += "\\n";
+      }
       page.cleanup();
     }
-    parentPort.postMessage(null);
+    parentPort.postMessage(workerData.extract ? { text } : null);
   } catch (error) {
-    parentPort.postMessage(error?.name === "ParserUnavailable" ? "parser_unavailable" : error?.name === "PasswordException" ? "encrypted_pdf" : "invalid_pdf");
+    parentPort.postMessage(error?.name === "ParserUnavailable" ? "parser_unavailable" : error?.name === "TextLimit" ? "text_too_large" : error?.name === "PasswordException" ? "encrypted_pdf" : "invalid_pdf");
   } finally {
     if (document) await document.destroy().catch(() => {});
   }
 })();
 `
-export async function validatePdf(bytes: Buffer, timeoutMs = PDF_TIMEOUT_MS) {
+export async function validatePdf(
+  bytes: Buffer,
+  timeoutMs = PDF_TIMEOUT_MS,
+  extract = false,
+  maxChars = 40_000
+) {
   const worker = new Worker(parserSource, {
     eval: true,
     workerData: {
       bytes,
+      extract,
+      maxChars,
       maxPages: PDF_MAX_PAGES,
       moduleUrl: import.meta.resolve("unpdf"),
     },
@@ -51,21 +67,28 @@ export async function validatePdf(bytes: Buffer, timeoutMs = PDF_TIMEOUT_MS) {
   worker.stderr?.resume()
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    await new Promise<void>((resolve, reject) => {
+    return await new Promise<string | void>((resolve, reject) => {
       timer = setTimeout(
         () => reject(new FileValidationError("validation_timeout")),
         timeoutMs
       )
       worker.once("message", (code: unknown) =>
-        code === null
-          ? resolve()
-          : code === "parser_unavailable"
-            ? reject(new Error("parser_unavailable"))
-            : reject(
-                new FileValidationError(
-                  code === "encrypted_pdf" ? code : "invalid_pdf"
+        typeof code === "object" &&
+        code !== null &&
+        "text" in code &&
+        typeof code.text === "string"
+          ? resolve(code.text)
+          : code === null
+            ? resolve()
+            : code === "parser_unavailable"
+              ? reject(new Error("parser_unavailable"))
+              : reject(
+                  new FileValidationError(
+                    code === "encrypted_pdf" || code === "text_too_large"
+                      ? code
+                      : "invalid_pdf"
+                  )
                 )
-              )
       )
       worker.once("error", () => reject(new FileValidationError("invalid_pdf")))
       worker.once("exit", () => reject(new FileValidationError("invalid_pdf")))

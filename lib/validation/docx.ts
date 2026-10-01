@@ -8,7 +8,7 @@ import {
 import { FileValidationError } from "./errors"
 
 // Classic, single-disk ZIP only. No extraction, filesystem paths or Zip64.
-export function validateDocx(bytes: Buffer) {
+export function validateDocx(bytes: Buffer, documentOnly = false) {
   const invalid = () => {
     throw new FileValidationError("invalid_docx")
   }
@@ -172,7 +172,7 @@ export function validateDocx(bytes: Buffer) {
       ["[Content_Types].xml", "word/document.xml", "_rels/.rels"].includes(
         name
       ) &&
-      !uncompressed
+      (!uncompressed || uncompressed > DOCX_MAX_XML_BYTES)
     )
       invalid()
     cursor = next
@@ -194,6 +194,15 @@ export function validateDocx(bytes: Buffer) {
   // and CRC as well as claimed totals; never allocate beyond the checked claim.
   const markers = new Map<string, string>()
   for (const entry of entries) {
+    // Extraction runs only against a byte-for-byte hashed, validated upload.
+    // Avoid expanding media a second time; retain full preflight bounds.
+    if (
+      documentOnly &&
+      !["[Content_Types].xml", "word/document.xml", "_rels/.rels"].includes(
+        entry.name
+      )
+    )
+      continue
     const compressed = bytes.subarray(
       entry.dataOffset,
       entry.dataOffset + entry.compressed
@@ -251,6 +260,7 @@ export function validateDocx(bytes: Buffer) {
   if (!document.document || !("body" in document.document)) invalid()
   const relationships = parser.parse(markers.get("_rels/.rels")!)
   if (!relationships.Relationships) invalid()
+  return markers.get("word/document.xml")!
 }
 
 // ZIP CRC-32 (IEEE); table built once, no archive libraries or filesystem writes.

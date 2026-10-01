@@ -24,7 +24,7 @@ export default async function ResumePage() {
           Resume file
         </CardTitle>
         <CardDescription>
-          Upload a PDF or Word document to your private JobSync storage.
+          Upload a PDF or Word document to create a private structured draft for your review.
         </CardDescription>
       </CardHeader>
       <CardContent>

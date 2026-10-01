@@ -23,7 +23,9 @@
     "storage:smoke": "node --conditions=react-server --import tsx scripts/storage-smoke.ts",
     "storage:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/storage.test.ts tests/storage-api.test.ts tests/storage-database.test.ts tests/storage-presigner.test.ts",
     "validation:test": "node --import tsx --test tests/validation.test.ts",
-    "worker:test": "node --import tsx --test --test-concurrency=1 tests/processing-run.test.ts tests/trigger-handler.test.ts tests/resume-worker.test.ts tests/download-object.test.ts tests/runtime-boundary.test.ts"
+    "worker:test": "node --import tsx --test --test-concurrency=1 tests/processing-run.test.ts tests/trigger-handler.test.ts tests/resume-worker.test.ts tests/download-object.test.ts tests/runtime-boundary.test.ts",
+    "ai:test": "node --import tsx --test --test-concurrency=1 tests/extraction.test.ts tests/ai-boundary.test.ts tests/ai-accounting.test.ts",
+    "ai:live-proof": "node --import tsx scripts/ai-live-proof.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",
@@ -32,10 +34,12 @@
     "@hookform/resolvers": "^5.9.1",
     "@neondatabase/auth": "0.5.0-beta",
     "@next/env": "16.3.6",
+    "@openrouter/ai-sdk-provider": "3.1.0",
     "@prisma/adapter-neon": "7.10.0",
     "@prisma/client": "7.10.0",
     "@shadcn/react": "^0.3.1",
     "@tanstack/react-table": "^9.2.4",
+    "ai": "7.0.126",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",
     "date-fns": "^4",

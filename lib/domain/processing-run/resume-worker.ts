@@ -19,7 +19,11 @@ export function createResumeWorker(
   storage: UploadStorage,
   download: (key: string, size: bigint) => Promise<Buffer>,
   validate = validateResume,
-  runs = createProcessingRuns(db)
+  runs = createProcessingRuns(db),
+  structureWorker?: {
+    uploaded(upload: ResumeUpload): Promise<string>
+    recover(): Promise<unknown>
+  }
 ) {
   const uploads = createUploadService(createUploadRepository(db), storage)
   async function process(runId: string | null = null) {
@@ -120,7 +124,14 @@ export function createResumeWorker(
       })
       if (!upload) return { status: "ignored" }
       const run = await reconcile(upload)
-      return { status: run ? await process(run.id) : "settled" }
+      const status = run ? await process(run.id) : "settled"
+      if (structureWorker) {
+        const settled = await db.resumeUpload.findUniqueOrThrow({
+          where: { id: upload.id },
+        })
+        if (settled.contentSha256) await structureWorker.uploaded(settled)
+      }
+      return { status }
     },
     async recover() {
       const counts = { reconciled: 0, ensured: 0, processed: 0, errors: 0 }
@@ -178,6 +189,7 @@ export function createResumeWorker(
           data: { updatedAt: new Date() },
         })
       }
+      if (structureWorker) await structureWorker.recover()
       return counts
     },
   }

@@ -3,8 +3,7 @@
 Next.js 16 application with Neon Postgres, Neon Managed Better Auth, and private Neon Object Storage.
 The protected `/dashboard` establishes the server-side identity and application
 profile boundary. `/dashboard/resume` provides direct presigned browser uploads
-and ownership-checked private downloads. Neon Functions validate PDF/DOCX bytes asynchronously; AI, billing, and the
-final application shell remain deferred.
+and ownership-checked private downloads. Neon Functions validate and extract PDF/DOCX text, then structure a factual draft through OpenRouter with durable usage accounting. The final shell and subscriptions remain deferred.
 
 Use Node.js 22.12+ or 24 LTS and pnpm (the repository pins pnpm in `package.json`).
 
@@ -190,8 +189,7 @@ capability requests also reject an Origin that differs from APP_ORIGIN.
 
 **Uploaded is transport acceptance only.** A successful deterministic byte
 validation leaves this transport status unchanged and sets validation metadata.
-Invalid bytes become rejected. No ResumeVersion, extracted text, semantic resume
-facts, or AI work is created. Reconciliation resolves a stored object key through
+Invalid bytes become rejected. Validation itself creates no semantic facts; the subsequent structuring run creates a review-required draft. Reconciliation resolves a stored object key through
 Postgres first; event paths alone never establish ownership.
 
 `storage:smoke` is read-only and writes no objects. `storage:test` uses mocked
@@ -305,10 +303,9 @@ choose the production cadence. Child branches inherit triggers disabled; enable
 them deliberately only on isolated test branches.
 
 The browser polls immediately, then backs off to five-second intervals and stops
-after about 45 seconds. Each request has a five-second timeout. Polling aborts on
+after about 90 seconds. Each request has a five-second timeout. Polling aborts on
 unmount/change. Users can leave the page; processing continues in Neon. Revisiting
-the page checks the latest owner-qualified upload. There is **no AI call,
-resume text storage, extraction, or ResumeVersion creation** in this slice.
+the page checks the latest owner-qualified upload. Successful validation now chains the bounded AI draft workflow described below. Extracted source text stays transient.
 
 ### Runtime boundaries and local workflow
 
@@ -373,3 +370,47 @@ Current official references: [Functions](https://neon.com/docs/compute/functions
 [Function environments](https://neon.com/docs/compute/functions/environment-variables),
 [runtime limits](https://neon.com/docs/compute/functions/reference/runtime-limits),
 [unpdf](https://github.com/unjs/unpdf).
+
+## Resume structuring and AI accounting
+
+See [AI workflow handoff](docs/RESUME_AI_HANDOFF.md) for the architecture, migration,
+privacy/routing research, failure semantics, live cost evidence and release checks.
+
+The same `resumeworker` Function now chains a separate `resume_structure_v1` run
+following successful validation. Recovery discovers validated uploads missing that
+run. Existing Postgres leases, concurrency caps, cancellation and scheduled wakes
+remain authoritative; no browser, external queue or Neon AI Gateway is required.
+
+Set server-only `OPENROUTER_API_KEY` in `.env.local`. Supply it to Function config
+via the environment when planning/deploying; never commit or expose it to users:
+
+```bash
+neon deploy --env .env.local --no-env-pull # explicitly verified isolated branch only
+pnpm ai:test                           # deterministic fixtures + real Postgres accounting
+JOBSYNC_AI_LIVE_BRANCH=lively-shape-65452824/br-tiny-tree-b44fo1lv pnpm ai:live-proof
+```
+
+AI SDK 7.0.126 and the official OpenRouter provider 3.1.0 are pinned. Model and
+routing live only in `lib/ai/config.ts`: GPT-6 Luna via Azure, mandatory ZDR,
+`data_collection: deny`, strict structured output, required parameter support,
+no fallback, no SDK retries, 6,000 output tokens and a 60-second deadline.
+
+The database `AiBudgetPolicy` row `resume` controls the immediate kill switch,
+10 starter operations/month, $1 owner monthly ceiling, and $5 global daily ceiling.
+These are internal starter allowances, not subscription entitlements. Admission
+includes unresolved holds from prior days/months. Disable `enabled` to stop new
+reservations and dispatches; already-dispatched calls still reconcile.
+
+A committed in-flight usage marker precedes every provider request. Provider
+receipts are captured before output validation, and accepted drafts/run completion
+and final accounting commit together. Missing cost or ambiguous outcomes remain
+`reconciliation_required`; expiry never implies zero cost or a refund. Generation
+IDs permit read-only OpenRouter billing reconciliation. No-ID ambiguity requires
+operator review and never triggers another paid request.
+
+The draft stores strict source-grounded data and short evidence passages, with
+upload/run ownership-qualified foreign keys, the exact SHA-256, extraction/prompt/
+schema versions, and unique source operation. Full extracted text, prompts and
+responses are not retained or logged. Unknown fields remain null; dates and facts
+are verbatim. Users must review associations and extraction completeness against
+the original file; v1 does not accept or finalize the draft.

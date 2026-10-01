@@ -91,6 +91,14 @@ model ResumeVersion {
   source           ResumeVersionSource
   status           ResumeVersionStatus @default(draft)
   data             Json                @db.JsonB
+  sourceUploadId   String?             @unique @db.Uuid
+  processingRunId  String?             @unique @db.Uuid
+  sourceSha256     String?             @db.VarChar(64)
+  extractionVersion String?
+  promptVersion    String?
+  schemaVersion    String?
+  sourceUpload ResumeUpload? @relation(fields: [ownerUserId, resumeId, sourceUploadId, sourceSha256], references: [ownerUserId, resumeId, id, contentSha256], onDelete: Restrict, onUpdate: Restrict)
+  processingRun ProcessingRun? @relation(fields: [ownerUserId, processingRunId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
   extractedText    String?
   storageObjectKey String?             @unique
   createdAt        DateTime            @default(now()) @db.Timestamptz(3)
@@ -99,6 +107,8 @@ model ResumeVersion {
   owner  UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   resume Resume      @relation(fields: [ownerUserId, resumeId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
 
+  @@unique([ownerUserId, resumeId, sourceUploadId, sourceSha256])
+  @@unique([ownerUserId, processingRunId])
   @@unique([resumeId, version])
   @@index([ownerUserId, resumeId])
 }
@@ -142,6 +152,9 @@ model ProcessingRun {
   createdAt               DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt               DateTime            @updatedAt @db.Timestamptz(3)
 
+  draft ResumeVersion?
+  @@unique([ownerUserId, id])
+
   owner UserProfile? @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
 
   @@index([status, availableAt, id])
@@ -178,6 +191,7 @@ model AiUsageReservation {
   @@index([ownerUserId, createdAt])
   @@index([ownerUserId, status, expiresAt])
   @@index([status, expiresAt])
+  @@index([createdAt, status])
 }
 
 // One record per provider attempt (including retries); only reconciliation updates it.
@@ -238,10 +252,22 @@ model ResumeUpload {
   createdAt             DateTime              @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime              @updatedAt @db.Timestamptz(3)
 
+  draft ResumeVersion?
+  @@unique([ownerUserId, resumeId, id, contentSha256])
   owner  UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   resume Resume      @relation(fields: [ownerUserId, resumeId], references: [ownerUserId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@index([ownerUserId, status, createdAt])
   @@index([status, expiresAt])
   @@index([status, validationCompletedAt, createdAt])
+}
+
+// Database-owned kill switch and starter allowances. Missing policy fails closed.
+model AiBudgetPolicy {
+  id String @id
+  enabled Boolean @default(false)
+  ownerMonthlyUnits BigInt
+  ownerMonthlyCostMicroUsd BigInt
+  globalDailyCostMicroUsd BigInt
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
 }

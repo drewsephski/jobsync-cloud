@@ -147,6 +147,9 @@ try {
   })
 } finally {
   for (const key of keys) await storage.remove(key)
+  await db.resumeVersion.deleteMany({ where: { ownerUserId: owner } })
+  await db.aiUsage.deleteMany({ where: { ownerUserId: owner } })
+  await db.aiUsageReservation.deleteMany({ where: { ownerUserId: owner } })
   await db.processingRun.deleteMany({ where: { ownerUserId: owner } })
   await db.resumeUpload.deleteMany({ where: { ownerUserId: owner } })
   await db.resume.deleteMany({ where: { ownerUserId: owner } })

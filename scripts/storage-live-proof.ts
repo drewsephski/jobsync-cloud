@@ -419,6 +419,18 @@ async function main() {
     try {
       if (ownerIds.length) {
         await db.$transaction(async (tx) => {
+          await tx.resumeVersion.deleteMany({
+            where: { ownerUserId: { in: ownerIds } },
+          })
+          await tx.aiUsage.deleteMany({
+            where: { ownerUserId: { in: ownerIds } },
+          })
+          await tx.aiUsageReservation.deleteMany({
+            where: { ownerUserId: { in: ownerIds } },
+          })
+          await tx.processingRun.deleteMany({
+            where: { ownerUserId: { in: ownerIds } },
+          })
           await tx.resumeUpload.deleteMany({
             where: { ownerUserId: { in: ownerIds } },
           })

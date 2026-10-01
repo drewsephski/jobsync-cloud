@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { CardDescription } from "@/components/ui/card"
+import { FieldGroup } from "@/components/ui/field"
+import type { StructuredResume } from "@/lib/ai/resume-schema"
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -80,13 +88,14 @@ export function ResumeUpload({
   const [error, setError] = useState<string | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(initialUploadId)
   const [validated, setValidated] = useState(false)
+  const [draft, setDraft] = useState<StructuredResume | null>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!uploadId) return
     const abort = new AbortController()
     async function poll() {
-      const deadline = Date.now() + 45_000
+      const deadline = Date.now() + 90_000
       let delay = 0
       while (!abort.signal.aborted && Date.now() < deadline) {
         if (delay)
@@ -102,6 +111,11 @@ export function ResumeUpload({
         if (abort.signal.aborted) return
         try {
           const result = await requestJson<{
+            structuring: {
+              state: "processing" | "draft" | "failed"
+              message: string
+              draft: { data: StructuredResume } | null
+            } | null
             validation: {
               state: "pending" | "valid" | "rejected"
               message: string | null
@@ -112,8 +126,18 @@ export function ResumeUpload({
           if (abort.signal.aborted) return
           if (result.validation.state === "valid") {
             setValidated(true)
-            setStatus("Resume file validated.")
-            return
+            setStatus(
+              result.structuring?.message ??
+                "Resume file validated. Preparing your structured draft…"
+            )
+            if (result.structuring?.state === "draft") {
+              setDraft(result.structuring.draft!.data)
+              return
+            }
+            if (result.structuring?.state === "failed") {
+              setError(result.structuring.message)
+              return
+            }
           }
           if (result.validation.state === "rejected") {
             setStatus("The resume file was rejected.")
@@ -141,6 +165,7 @@ export function ResumeUpload({
     setFile(nextFile)
     setUploadId(null)
     setValidated(false)
+    setDraft(null)
     setError(null)
     setStatus(
       nextFile ? "Ready to upload." : "Choose a PDF or DOCX file to begin."
@@ -153,6 +178,7 @@ export function ResumeUpload({
     setError(null)
     setUploadId(null)
     setValidated(false)
+    setDraft(null)
 
     try {
       const intent = uploadIntentSchema.parse({
@@ -237,8 +263,8 @@ export function ResumeUpload({
     .join(",")
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-2">
+    <FieldGroup className="gap-4">
+      <FieldGroup className="gap-2">
         <Label htmlFor="resume-file">Resume file</Label>
         <Input
           id="resume-file"
@@ -251,10 +277,11 @@ export function ResumeUpload({
           aria-describedby="resume-file-help"
         />
         <CardDescription id="resume-file-help">
-          PDF or DOCX · up to {formatSize(MAX_RESUME_FILE_SIZE_BYTES)}. File
-          validation continues in the background after upload.
+          PDF or DOCX · up to {formatSize(MAX_RESUME_FILE_SIZE_BYTES)}. AI
+          structuring continues in the background. The result is a draft for
+          your review.
         </CardDescription>
-      </div>
+      </FieldGroup>
 
       {file ? (
         <CardDescription>
@@ -262,7 +289,7 @@ export function ResumeUpload({
         </CardDescription>
       ) : null}
 
-      <div className="flex flex-wrap gap-3">
+      <FieldGroup className="flex-row flex-wrap gap-3">
         <Button
           type="button"
           onClick={uploadSelectedFile}
@@ -280,17 +307,89 @@ export function ResumeUpload({
             Open uploaded file
           </Button>
         ) : null}
-      </div>
+      </FieldGroup>
 
       <CardDescription role="status" aria-live="polite">
         {status}
       </CardDescription>
+      {draft ? (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle role="heading" aria-level={2}>
+              Structured draft · review required
+            </CardTitle>
+            <CardDescription>
+              Check all facts and dates against your original file. This draft
+              has not been accepted or finalized.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-4">
+            <CardDescription className="whitespace-pre-wrap">
+              {[
+                draft.contact.name,
+                draft.contact.email,
+                draft.contact.phone,
+                draft.contact.location,
+                ...draft.contact.links,
+              ]
+                .filter(Boolean)
+                .join("\n")}
+            </CardDescription>
+            {draft.summary ? (
+              <CardDescription>{draft.summary}</CardDescription>
+            ) : null}
+            {draft.skills.length ? (
+              <CardDescription>
+                Skills: {draft.skills.join(" · ")}
+              </CardDescription>
+            ) : null}
+            {draft.employment.map((entry, index) => (
+              <FieldGroup key={index} className="gap-1">
+                <CardTitle role="heading" aria-level={3}>
+                  {[entry.title, entry.employer].filter(Boolean).join(" · ")}
+                </CardTitle>
+                <CardDescription>
+                  {[entry.startDate, entry.endDate].filter(Boolean).join(" – ")}
+                  {entry.location ? ` · ${entry.location}` : ""}
+                </CardDescription>
+                {entry.highlights.map((line, i) => (
+                  <CardDescription key={i}>{line}</CardDescription>
+                ))}
+              </FieldGroup>
+            ))}
+            {draft.education.map((entry, index) => (
+              <FieldGroup key={index} className="gap-1">
+                <CardTitle role="heading" aria-level={3}>
+                  {entry.institution}
+                </CardTitle>
+                <CardDescription>
+                  {[
+                    entry.qualification,
+                    entry.field,
+                    entry.startDate,
+                    entry.endDate,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </CardDescription>
+              </FieldGroup>
+            ))}
+            {draft.credentials.map((entry, index) => (
+              <CardDescription key={index}>
+                {[entry.name, entry.issuer, entry.date]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </CardDescription>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
       {error ? (
         <Alert variant="destructive">
           <AlertTitle>Upload unavailable</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
-    </div>
+    </FieldGroup>
   )
 }

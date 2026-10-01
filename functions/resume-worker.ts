@@ -6,11 +6,20 @@ import { createObjectDownloader } from "../lib/backend/download-object"
 import { createResumeWorker } from "../lib/domain/processing-run/resume-worker"
 import { createTriggerHandler, type WorkerOperations } from "./trigger-handler"
 
+import { createResumeStructureWorker } from "../lib/domain/resume-structure/worker"
+import {
+  createResumeStructurer,
+  fetchGenerationReceipt,
+} from "../lib/ai/openrouter"
+import { createProcessingRuns } from "../lib/domain/processing-run/service"
+import { validateResume } from "../lib/validation/resume"
+
 let worker: WorkerOperations | undefined
 function getWorker() {
   if (worker) return worker
   const result = z
     .object({
+      OPENROUTER_API_KEY: z.string().min(1),
       DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
       AWS_ENDPOINT_URL_S3: z.url({ protocol: /^https$/ }),
       AWS_REGION: z.string().min(1),
@@ -27,10 +36,20 @@ function getWorker() {
     accessKeyId: env.AWS_ACCESS_KEY_ID,
     secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
   })
+  const download = createObjectDownloader(storage)
+  const structuring = createResumeStructureWorker(
+    db,
+    download,
+    createResumeStructurer(env.OPENROUTER_API_KEY),
+    (id) => fetchGenerationReceipt(env.OPENROUTER_API_KEY, id)
+  )
   worker = createResumeWorker(
     db,
     createS3Transport(storage),
-    createObjectDownloader(storage)
+    download,
+    validateResume,
+    createProcessingRuns(db),
+    structuring
   )
   return worker
 }

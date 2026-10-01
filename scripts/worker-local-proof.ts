@@ -130,7 +130,9 @@ try {
     assert.ok(valid.validationCompletedAt)
     assert.match(valid.contentSha256!, /^[0-9a-f]{64}$/)
     assert.equal(
-      await db.processingRun.count({ where: { resourceId: upload.id } }),
+      await db.processingRun.count({
+        where: { resourceId: upload.id, kind: "resume_validate_v1" },
+      }),
       1
     )
     console.log({ check: `local ${format} connectivity/replay`, passed: true })
@@ -146,6 +148,9 @@ try {
   })
 } finally {
   for (const key of keys) await storage.remove(key)
+  await db.resumeVersion.deleteMany({ where: { ownerUserId: owner } })
+  await db.aiUsage.deleteMany({ where: { ownerUserId: owner } })
+  await db.aiUsageReservation.deleteMany({ where: { ownerUserId: owner } })
   await db.processingRun.deleteMany({ where: { ownerUserId: owner } })
   await db.resumeUpload.deleteMany({ where: { ownerUserId: owner } })
   await db.resume.deleteMany({ where: { ownerUserId: owner } })

@@ -4,9 +4,12 @@ export default defineConfig({
   auth: true,
   functions: {
     resumeworker: {
-      name: "Resume validation worker",
+      name: "Resume processing worker",
       source: "./functions/resume-worker.ts",
-      externalPackages: ["unpdf"],
+      externalPackages: ["unpdf", "fast-xml-parser"],
+      env: process.env.OPENROUTER_API_KEY
+        ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
+        : undefined,
       dev: { port: 8787 },
     },
   },
