@@ -101,6 +101,16 @@ export function createDiscoveryService(db: PrismaClient) {
           },
         })
         matches.push(...historical)
+        const applications = await tx.application.findMany({
+          where: {
+            ownerUserId: user.id,
+            sourcePostingKey: { in: matches.map((m) => m.jobPostingId) },
+          },
+          select: { id: true, sourcePostingKey: true, archivedAt: true },
+        })
+        const applicationMap = new Map(
+          applications.map((a) => [a.sourcePostingKey, a])
+        )
         const stateMap = new Map(states.map((s) => [s.jobPostingId, s.state]))
         const isCurrent = (match: (typeof matches)[number]) =>
           !!input &&
@@ -172,6 +182,10 @@ export function createDiscoveryService(db: PrismaClient) {
             .slice(0, 50)
             .map((m) => ({
               id: m.jobPostingId,
+              matchId: m.id,
+              applicationId: applicationMap.get(m.jobPostingId)?.id ?? null,
+              applicationArchived: !!applicationMap.get(m.jobPostingId)
+                ?.archivedAt,
               title: m.posting.title,
               company: m.posting.board.company.name,
               provider: m.posting.board.provider,

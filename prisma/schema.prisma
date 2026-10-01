@@ -70,6 +70,7 @@ model UserProfile {
   companyWatches CompanyWatch[]
   jobMatches JobMatch[]
   jobStates UserJobState[]
+  applications Application[]
 }
 
 model Resume {
@@ -105,6 +106,7 @@ model ResumeVersion {
   edits ResumeVersion[] @relation("DraftEdits")
   confirmedFor Resume[] @relation("ConfirmedResume")
   jobMatches JobMatch[]
+  applications Application[]
   sourceUploadId   String?             @unique @db.Uuid
   processingRunId  String?             @unique @db.Uuid
   sourceSha256     String?             @db.VarChar(64)
@@ -336,6 +338,7 @@ model JobPosting {
   board AtsBoard @relation(fields: [boardId], references: [id], onDelete: Restrict)
   matches JobMatch[]
   states UserJobState[]
+  applications Application[]
   @@unique([boardId, externalId])
   @@index([boardId, open, firstSeenAt])
 }
@@ -388,4 +391,77 @@ model JobMatch {
   posting JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
   @@unique([ownerUserId, id])
   @@index([ownerUserId, jobPostingId, createdAt])
+}
+
+// Private workflow: catalog links are optional; captured source identity is durable.
+enum ApplicationStatus {
+  saved
+  applied
+  interview
+  offer
+  rejected
+  withdrawn
+}
+
+enum ApplicationEventKind {
+  created
+  transition
+  archived
+  restored
+}
+
+model Application {
+  id               String             @id @default(uuid()) @db.Uuid
+  ownerUserId      String
+  jobPostingId     String?            @db.Uuid
+  sourcePostingKey String?            @db.Uuid
+  creationKey      String             @db.Uuid
+  // Immutable original source and match metadata, separate from editable details.
+  sourceSnapshot   Json               @db.JsonB
+  company          String             @db.VarChar(200)
+  title            String             @db.VarChar(200)
+  location         String             @db.VarChar(300)
+  postingUrl       String?            @db.VarChar(2000)
+  salary           String?            @db.VarChar(200)
+  notes            String?            @db.VarChar(10000)
+  status           ApplicationStatus  @default(saved)
+  stageName        String?            @db.VarChar(120)
+  appliedOn        DateTime?          @db.Date
+  followUpOn       DateTime?          @db.Date
+  nextAction       String?            @db.VarChar(300)
+  resumeId         String?            @db.Uuid
+  resumeVersionId  String?            @db.Uuid
+  resumeSnapshot   Json?              @db.JsonB
+  revision         Int                @default(0)
+  archivedAt       DateTime?          @db.Timestamptz(3)
+  createdAt        DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime           @updatedAt @db.Timestamptz(3)
+  owner            UserProfile        @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  posting          JobPosting?        @relation(fields: [jobPostingId], references: [id], onDelete: SetNull)
+  resumeVersion    ResumeVersion?     @relation(fields: [ownerUserId, resumeId, resumeVersionId], references: [ownerUserId, resumeId, id], onDelete: Restrict, onUpdate: Restrict)
+  events           ApplicationEvent[]
+
+  @@unique([ownerUserId, id])
+  @@unique([ownerUserId, sourcePostingKey])
+  @@unique([ownerUserId, creationKey])
+  @@index([ownerUserId, archivedAt, status, updatedAt])
+  @@index([ownerUserId, followUpOn])
+}
+
+model ApplicationEvent {
+  id            String               @id @default(uuid()) @db.Uuid
+  ownerUserId   String
+  applicationId String               @db.Uuid
+  revision      Int
+  kind          ApplicationEventKind
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  stageName     String?              @db.VarChar(120)
+  occurredOn    DateTime             @db.Date
+  note          String?              @db.VarChar(2000)
+  createdAt     DateTime             @default(now()) @db.Timestamptz(3)
+  application   Application          @relation(fields: [ownerUserId, applicationId], references: [ownerUserId, id], onDelete: Cascade, onUpdate: Restrict)
+
+  @@unique([applicationId, revision])
+  @@index([ownerUserId, createdAt])
 }

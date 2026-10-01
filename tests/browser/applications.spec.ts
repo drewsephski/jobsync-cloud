@@ -1,0 +1,555 @@
+import { test, expect, type Page } from "@playwright/test"
+import assert from "node:assert/strict"
+import { execFileSync } from "node:child_process"
+import { randomUUID } from "node:crypto"
+import { createDatabaseClient } from "../../lib/backend/create-db-client"
+import { sanitizedResume } from "../resume-structure-fixtures"
+import {
+  ALGORITHM_VERSION,
+  preferenceFingerprint,
+} from "../../lib/domain/discovery/relevance"
+
+const project = "lively-shape-65452824"
+const branch = "br-tiny-tree-b44fo1lv"
+const db = createDatabaseClient(process.env.DATABASE_URL!)
+const users: string[] = []
+const password = `Applications-proof-${randomUUID()}!`
+let baselineProfiles: { id: string; createdAt: Date }[] = []
+let baselinePostingCount = 0
+let fixturePostingSnapshot: {
+  id: string
+  contentHash: string
+  open: boolean
+} | null = null
+
+test.beforeAll(async () => {
+  assert.ok(
+    new URL(process.env.DATABASE_URL!).hostname.startsWith(
+      "ep-green-scene-b45djevq"
+    ),
+    "browser tests require the isolated branch"
+  )
+  baselineProfiles = await db.userProfile.findMany({
+    select: { id: true, createdAt: true },
+    orderBy: { id: "asc" },
+  })
+  baselinePostingCount = await db.jobPosting.count()
+})
+
+test.afterAll(async () => {
+  try {
+    assert.ok(
+      users.every((id) => !baselineProfiles.some((p) => p.id === id)),
+      "only fixture users can be removed"
+    )
+    if (users.length) {
+      expect(
+        await db.aiUsage.count({ where: { ownerUserId: { in: users } } })
+      ).toBe(0)
+      expect(
+        await db.aiUsageReservation.count({
+          where: { ownerUserId: { in: users } },
+        })
+      ).toBe(0)
+      await db.application.deleteMany({ where: { ownerUserId: { in: users } } })
+      await db.userJobState.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
+      await db.jobMatch.deleteMany({ where: { ownerUserId: { in: users } } })
+      await db.companyWatch.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
+      await db.targetPreference.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
+      await db.resume.updateMany({
+        where: { ownerUserId: { in: users } },
+        data: { confirmedVersionId: null, confirmedAt: null },
+      })
+      await db.resumeVersion.deleteMany({
+        where: { ownerUserId: { in: users } },
+      })
+      await db.resume.deleteMany({ where: { ownerUserId: { in: users } } })
+      await db.userProfile.deleteMany({ where: { id: { in: users } } })
+      for (const id of users)
+        execFileSync(
+          "neon",
+          [
+            "neon-auth",
+            "user",
+            "delete",
+            id,
+            "--project-id",
+            project,
+            "--branch",
+            branch,
+          ],
+          { stdio: "ignore" }
+        )
+    }
+    expect(
+      await db.userProfile.findMany({
+        select: { id: true, createdAt: true },
+        orderBy: { id: "asc" },
+      })
+    ).toEqual(baselineProfiles)
+    const afterCount = await db.jobPosting.count()
+    const fixtureAfter = fixturePostingSnapshot
+      ? await db.jobPosting.findUnique({
+          where: { id: fixturePostingSnapshot.id },
+          select: { id: true, contentHash: true, open: true },
+        })
+      : null
+    // Live catalog refresh may change the total during a long proof. The fixture
+    // itself must preserve its public posting identity and captured content state.
+    expect(afterCount).toBeGreaterThanOrEqual(baselinePostingCount)
+    if (fixturePostingSnapshot)
+      expect(fixtureAfter).toEqual(fixturePostingSnapshot)
+    console.log(
+      JSON.stringify({
+        cleanup: "complete",
+        publicPostingsPreserved: true,
+        founderPreserved: true,
+        zeroAiCalls: true,
+        temporaryAuthUsers: users.length,
+      })
+    )
+  } finally {
+    await db.$disconnect()
+  }
+})
+
+async function signup(page: Page) {
+  await page.goto("/auth/sign-up")
+  await page
+    .getByLabel("Name", { exact: true })
+    .fill("Applications isolated proof")
+  await page
+    .getByLabel("Email address")
+    .fill(`applications-${randomUUID()}@example.com`)
+  await page.getByLabel("Password", { exact: true }).fill(password)
+  await page
+    .getByRole("button", { name: "Create Account", exact: true })
+    .click()
+  await expect(page).toHaveURL(/\/onboarding$/)
+  const session = await (await page.request.get("/api/auth/get-session")).json()
+  users.push(session.user.id)
+  return session.user.id as string
+}
+
+async function seed(owner: string) {
+  const posting = await db.jobPosting.findFirst({
+    where: {
+      open: true,
+      board: { enabled: true, slug: { in: ["figma", "spotify", "linear"] } },
+      title: { contains: "engineer", mode: "insensitive" },
+    },
+    include: { board: { include: { company: true } } },
+    orderBy: [{ publishedAt: "desc" }, { id: "asc" }],
+  })
+  assert.ok(
+    posting,
+    "fixture branch needs an existing open engineering posting"
+  )
+  fixturePostingSnapshot = {
+    id: posting.id,
+    contentHash: posting.contentHash,
+    open: posting.open,
+  }
+  const now = new Date()
+  const resume = await db.resume.create({
+    data: { ownerUserId: owner, title: "Synthetic confirmed resume" },
+  })
+  const version = await db.resumeVersion.create({
+    data: {
+      ownerUserId: owner,
+      resumeId: resume.id,
+      version: 1,
+      source: "manual",
+      status: "ready",
+      data: sanitizedResume,
+    },
+  })
+  const target = await db.targetPreference.create({
+    data: {
+      ownerUserId: owner,
+      targetTitle: "Software Engineer",
+      keywords: ["TypeScript", "PostgreSQL"],
+    },
+  })
+  const preferenceHash = preferenceFingerprint([target])
+  await db.$transaction([
+    db.resume.update({
+      where: { id: resume.id },
+      data: { confirmedVersionId: version.id, confirmedAt: now },
+    }),
+    db.userProfile.update({
+      where: { id: owner },
+      data: {
+        displayName: "Applications isolated proof",
+        onboardingCompletedAt: now,
+        preferenceRevision: 1,
+      },
+    }),
+  ])
+  const match = await db.jobMatch.create({
+    data: {
+      ownerUserId: owner,
+      resumeId: resume.id,
+      resumeVersionId: version.id,
+      preferenceRevision: 1,
+      preferenceHash,
+      jobPostingId: posting.id,
+      postingVersion: posting.contentVersion,
+      postingHash: posting.contentHash,
+      algorithmVersion: ALGORITHM_VERSION,
+      inputKey: `browser:${randomUUID()}`,
+      relevance: 86,
+      reasons: [
+        "Title overlaps your Software Engineer target",
+        "Resume skills mentioned: TypeScript",
+      ],
+    },
+  })
+  // A private saved state makes the intentional historical match visible without a watch
+  // or a scheduler/AI side effect.
+  await db.userJobState.create({
+    data: { ownerUserId: owner, jobPostingId: posting.id, state: "saved" },
+  })
+  return { posting, match }
+}
+
+async function applications(page: Page) {
+  const response = await page.request.get("/api/applications")
+  expect(response.ok()).toBeTruthy()
+  return response.json() as Promise<{
+    applications: Array<{
+      id: string
+      title: string
+      company: string
+      status: string
+      stageName: string | null
+      revision: number
+      archivedAt: string | null
+      events: unknown[]
+    }>
+  }>
+}
+
+test("applications conversion and private lifecycle stay durable and isolated", async ({
+  page,
+  context,
+  browser,
+}) => {
+  const owner = await signup(page)
+  const { posting, match } = await seed(owner)
+
+  await page.goto("/dashboard/discover")
+  await page.getByRole("tab", { name: /Saved/ }).click()
+  const job = page.getByText(posting.title, { exact: true })
+  await expect(job).toBeVisible()
+  await expect(
+    page.getByText(posting.board.company.name, { exact: true })
+  ).toBeVisible()
+  await expect(page.getByText(/No completed AI analysis yet/)).toBeVisible()
+
+  const trackInput = {
+    action: "track",
+    postingId: posting.id,
+    matchId: match.id,
+  }
+  const trackResponsePromise = page.waitForResponse(
+    (response) =>
+      response.url().includes("/api/applications") &&
+      response.request().method() === "POST"
+  )
+  await page
+    .getByRole("button", { name: "Track application", exact: true })
+    .click()
+  const trackResponse = await trackResponsePromise
+  expect(trackResponse.status()).toBe(200)
+  await expect
+    .poll(() =>
+      db.application.count({
+        where: { ownerUserId: owner, sourcePostingKey: posting.id },
+      })
+    )
+    .toBe(1)
+  const initialApps = await applications(page)
+  const trackedId = initialApps.applications.find(
+    (a) => a.status === "saved"
+  )?.id
+  assert.ok(
+    trackedId,
+    "Discover should convert the saved match into an application"
+  )
+  const concurrent = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      page.request.post("/api/applications", { data: trackInput })
+    )
+  )
+  for (const response of concurrent) expect(response.ok()).toBeTruthy()
+  const converted = await Promise.all(concurrent.map((r) => r.json()))
+  expect(converted.filter((r) => r.created).length).toBe(0)
+  expect(new Set(converted.map((r) => r.applicationId)).size).toBe(1)
+  expect(converted[0].applicationId).toBe(trackedId)
+  expect(
+    await db.application.count({
+      where: { ownerUserId: owner, sourcePostingKey: posting.id },
+    })
+  ).toBe(1)
+  await page.goto(`/dashboard/jobs?application=${trackedId}`)
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await expect(page.getByText("From Discover", { exact: true })).toBeVisible()
+  await expect(
+    page.getByText("Why Discover surfaced this job", { exact: true })
+  ).toBeVisible()
+  await expect(page.getByRole("dialog")).toHaveCSS("opacity", "1")
+  await page.screenshot({
+    path: "output/playwright/application-detail-desktop.png",
+    fullPage: true,
+    animations: "disabled",
+  })
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+
+  // Keyboard opens the application detail and the status menu; the form save is also
+  // submitted from the keyboard to cover the accessible interaction path.
+  const open = page.getByRole("button", {
+    name: `Open ${posting.title} at ${posting.board.company.name}`,
+  })
+  await open.focus()
+  await page.keyboard.press("Enter")
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await page.getByRole("button", { name: "Record movement" }).focus()
+  await page.keyboard.press("Enter")
+  const status = page.getByLabel("Status", { exact: true })
+  await status.focus()
+  await page.keyboard.press("Enter")
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Enter")
+  // Movement requires a calendar date; use the application API's server-provided today.
+  const appData = await (await page.request.get("/api/applications")).json()
+  await page.getByLabel("Movement date", { exact: true }).fill(appData.today)
+  await page
+    .getByLabel("Stage name · optional", { exact: true })
+    .fill("Recruiter screen")
+  await page.getByRole("button", { name: "Save movement", exact: true }).focus()
+  await page.keyboard.press("Enter")
+  await expect(
+    page.getByText(/Saved \/ Preparing → Applied · Recruiter screen/)
+  ).toBeVisible()
+
+  await page.getByRole("button", { name: "Record movement" }).click()
+  const interviewStatus = page.getByLabel("Status", { exact: true })
+  await interviewStatus.click()
+  await page.getByRole("option", { name: "Interview", exact: true }).click()
+  await page
+    .getByLabel("Stage name · optional", { exact: true })
+    .fill("Technical interview")
+  await page.getByRole("button", { name: "Save movement", exact: true }).click()
+  await expect(
+    page.getByText(/Applied → Interview · Technical interview/)
+  ).toBeVisible()
+  const historyData = await applications(page)
+  const tracked = historyData.applications.find((a) => a.id === trackedId)
+  expect(tracked?.status).toBe("interview")
+  expect(tracked?.stageName).toBe("Technical interview")
+  expect(tracked?.events).toHaveLength(3)
+  expect(tracked?.revision).toBe(2)
+  await page.reload()
+  await expect(
+    page.getByText(/Applied → Interview · Technical interview/)
+  ).toBeVisible()
+
+  // A second browser tab retains its local draft on conflict, then can load the latest
+  // server version explicitly.
+  const stale = await context.newPage()
+  await stale.goto(`/dashboard/jobs?application=${trackedId}`)
+  await stale.getByRole("button", { name: "Edit details" }).click()
+  await stale
+    .getByLabel("Company", { exact: true })
+    .fill("Unsaved local company")
+  await page.getByRole("button", { name: "Edit details" }).click()
+  await page.getByLabel("Company", { exact: true }).fill("Updated company")
+  await page.getByRole("button", { name: "Save details", exact: true }).click()
+  await stale.getByRole("button", { name: "Save details", exact: true }).click()
+  await expect(stale.getByRole("alert")).toContainText("changed in another tab")
+  await expect(stale.getByLabel("Company", { exact: true })).toHaveValue(
+    "Unsaved local company"
+  )
+  await stale
+    .getByRole("button", { name: "Discard local edits & load latest" })
+    .click()
+  await stale.getByRole("button", { name: "Edit details" }).click()
+  await expect(stale.getByLabel("Company", { exact: true })).toHaveValue(
+    "Updated company"
+  )
+  await stale.close()
+
+  // Manual entries coexist with converted postings and can be archived/restored/deleted.
+  await page.goto("/dashboard/jobs")
+  await page
+    .getByRole("button", { name: "Add application", exact: true })
+    .click()
+  await page
+    .getByLabel("Company", { exact: true })
+    .fill("Manual Fixture Studio")
+  await page.getByLabel("Job title", { exact: true }).fill("Product Engineer")
+  const today = (await (await page.request.get("/api/applications")).json())
+    .today as string
+  await page
+    .getByLabel("Next action · optional", { exact: true })
+    .fill("Send a tailored introduction")
+  await page
+    .getByLabel("Follow-up date · optional", { exact: true })
+    .fill(today)
+  await page
+    .getByRole("button", { name: "Add application", exact: true })
+    .last()
+    .click()
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await expect(page.getByText("Added manually", { exact: true })).toBeVisible()
+  const manualId = (await applications(page)).applications.find(
+    (a) =>
+      a.title === "Product Engineer" && a.company === "Manual Fixture Studio"
+  )?.id
+  assert.ok(manualId)
+  await page.keyboard.press("Escape")
+  await page.goto("/dashboard")
+  await expect(page.getByText(/1 follow-ups? due/)).toBeVisible()
+  await expect(
+    page.getByText("Send a tailored introduction", { exact: true })
+  ).toBeVisible()
+  await expect(page.getByText(/Technical interview/)).toBeVisible()
+  await expect(
+    page.getByText("Active applications", { exact: true }).locator("..")
+  ).toContainText("2")
+  await expect(
+    page.getByText("In interviews", { exact: true }).locator("..")
+  ).toContainText("1")
+  await page.screenshot({
+    path: "output/playwright/application-dashboard-desktop.png",
+    fullPage: true,
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth
+    )
+  ).toBe(true)
+  await page.screenshot({
+    path: "output/playwright/application-dashboard-mobile.png",
+    fullPage: true,
+  })
+  await page.goto(`/dashboard/jobs?application=${manualId}`)
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await page.getByRole("button", { name: "Archive application" }).click()
+  await page.getByRole("button", { name: "Confirm archive" }).click()
+  await expect(
+    page.getByText("Archived", { exact: true }).first()
+  ).toBeVisible()
+  await page.getByRole("button", { name: "Restore application" }).click()
+  await page.keyboard.press("Escape")
+  await page.getByLabel("Show").click()
+  await page.getByRole("option", { name: "Archived", exact: true }).click()
+  await expect(page.getByText("Product Engineer", { exact: true })).toHaveCount(
+    0
+  )
+  await page.getByLabel("Show").click()
+  await page
+    .getByRole("option", { name: "All applications", exact: true })
+    .click()
+  await expect(
+    page.getByRole("button", {
+      name: "Open Product Engineer at Manual Fixture Studio",
+    })
+  ).toBeVisible()
+  await page.goto(`/dashboard/jobs?application=${manualId}`)
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await page.getByRole("button", { name: "Archive application" }).click()
+  await page.getByRole("button", { name: "Confirm archive" }).click()
+  await page.goto(`/dashboard/jobs?application=${manualId}`)
+  await expect(page.getByRole("dialog")).toBeVisible()
+  await page.getByRole("button", { name: "Delete application" }).click()
+  await page.getByRole("button", { name: "Delete permanently" }).click()
+  await expect(page.getByRole("dialog")).toHaveCount(0)
+
+  await page.getByRole("button", { name: "Refresh", exact: true }).click()
+  const secondContext = await browser.newContext({
+    baseURL: process.env.JOBSYNC_BROWSER_ORIGIN ?? "http://localhost:3000",
+  })
+  try {
+    const otherPage = await secondContext.newPage()
+    const otherOwner = await signup(otherPage)
+    await db.userProfile.update({
+      where: { id: otherOwner },
+      data: { onboardingCompletedAt: new Date() },
+    })
+    expect((await applications(otherPage)).applications).toEqual([])
+    const foreignDetails = {
+      company: "Foreign attempt",
+      title: "Foreign title",
+      location: "",
+      postingUrl: null,
+      salary: null,
+      notes: null,
+      appliedOn: null,
+      followUpOn: null,
+      nextAction: null,
+      resumeVersionId: null,
+    }
+    for (const action of [
+      {
+        action: "edit",
+        applicationId: trackedId,
+        expectedRevision: 0,
+        details: foreignDetails,
+      },
+      {
+        action: "archive",
+        applicationId: trackedId,
+        expectedRevision: 0,
+        archived: true,
+      },
+      { action: "delete", applicationId: trackedId, expectedRevision: 0 },
+      trackInput,
+    ]) {
+      expect(
+        (
+          await otherPage.request.post("/api/applications", { data: action })
+        ).status()
+      ).toBe(404)
+    }
+    expect(
+      (await applications(page)).applications.find((a) => a.id === trackedId)
+        ?.status
+    ).toBe("interview")
+    console.log(
+      JSON.stringify({
+        secondUserIsolation: true,
+        foreignApplicationWrites: "404",
+        applicationsVisible: 0,
+      })
+    )
+  } finally {
+    await secondContext.close()
+  }
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await expect(
+    page.getByRole("heading", { name: "Applications", exact: true })
+  ).toBeVisible()
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth
+    )
+  ).toBe(true)
+  expect(
+    (await applications(page)).applications.some((a) => a.id === trackedId)
+  ).toBe(true)
+  expect(
+    (await db.application.findUnique({ where: { id: trackedId } }))
+      ?.resumeVersionId
+  ).toBeNull()
+})

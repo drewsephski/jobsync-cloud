@@ -165,3 +165,10 @@ body:has(.onboarding-surface) { background: #f5f8fa; }
 .discovery-surface [data-slot="badge"] { border: 1px solid #dce3e8; background: #f5f8fa; color: #475569; box-shadow: none; }
 .discovery-surface [data-slot="empty"] { border-width: 1px; border-radius: 14px; }
 .discovery-surface [data-slot="item-title"] { font-weight: 500; }
+.onboarding-surface [data-slot="select-trigger"] { border-width: 1px; background: #fff; color: var(--foreground); font-weight: 400; }
+.onboarding-surface [data-slot="select-content"] { border-width: 1px; }
+.discovery-surface [data-slot="card-title"],
+.discovery-surface [data-slot="card-description"],
+.discovery-surface [data-slot="item-description"] { overflow-wrap: anywhere; }
+.onboarding-surface [data-slot="select-content"] { max-width: calc(100vw - 2rem); }
+.onboarding-surface [data-slot="select-item-text"] { white-space: normal; overflow-wrap: anywhere; }

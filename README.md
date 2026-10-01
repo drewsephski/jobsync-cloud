@@ -441,3 +441,16 @@ JOBSYNC_DISCOVERY_LIVE_BRANCH=lively-shape-65452824/br-tiny-tree-b44fo1lv pnpm d
 public boards at six-hour intervals and bounds private GPT-6 Luna matching to
 three calls per user per UTC day, with durable allowance/cost accounting.
 The OpenRouter key stays in the Function environment and is not needed by Vercel.
+
+## Private application tracker
+
+Discover openings can now become private applications, while jobs found elsewhere
+can be added manually at `/dashboard/jobs`. Both paths share editable details,
+six hiring statuses, named stages, durable movement history, follow-up dates and
+next actions. Saved Discover cards remain separate from tracked applications.
+The dashboard shows real application counts, follow-ups and movement.
+
+See [application tracking handoff](docs/APPLICATIONS_HANDOFF.md) for the snapshot
+model, owner isolation, confirmed resume associations, retry/revision rules,
+tests, deployment and production proof. Tracking is deterministic and adds no AI
+calls or automatic applications.

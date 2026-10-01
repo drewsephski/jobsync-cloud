@@ -307,7 +307,9 @@ async function resumeAndPreferences(
   })
   await page.getByRole("button", { name: "Finish onboarding" }).click()
   await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.getByText("Complete", { exact: true })).toBeVisible()
+  await expect(
+    page.getByRole("heading", { name: "Keep things moving.", exact: true })
+  ).toBeVisible()
   const completed = await state(page)
   expect(completed.targets).toHaveLength(2)
   expect(completed.completedAt).toBeTruthy()

@@ -10,6 +10,7 @@ import {
   RefreshCw,
   X,
   SlidersHorizontal,
+  Plus,
 } from "lucide-react"
 import type { DiscoveryData } from "@/lib/domain/discovery/service"
 import { Button } from "@/components/ui/button"
@@ -100,6 +101,25 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
       controller.abort()
     }
   }, [query, filter])
+  async function track(postingId: string, matchId: string) {
+    setBusy(true)
+    setError("")
+    try {
+      const response = await fetch("/api/applications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "track", postingId, matchId }),
+        signal: AbortSignal.timeout(15_000),
+      })
+      if (!response.ok)
+        throw new Error("Could not track this application. Please try again.")
+      setData(await request(query, filter))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Please try again.")
+    } finally {
+      setBusy(false)
+    }
+  }
   async function mutate(input: unknown) {
     setBusy(true)
     setError("")
@@ -132,7 +152,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
   return (
     <FieldGroup className="onboarding-surface discovery-surface mx-auto max-w-6xl gap-7 px-4 py-10 sm:px-8">
       <FieldGroup className="flex-row flex-wrap items-start justify-between gap-4">
-        <FieldGroup className="w-auto gap-2">
+        <FieldGroup className="min-w-0 flex-1 basis-full gap-2 sm:basis-0">
           <CardDescription className="text-xs tracking-widest uppercase">
             Your next opportunity
           </CardDescription>
@@ -151,9 +171,9 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
         <Button
           variant="neutral"
           nativeButton={false}
-          render={<Link href="/dashboard/resume" />}
+          render={<Link href="/dashboard/jobs" />}
         >
-          Review resume
+          Your applications
         </Button>
       </FieldGroup>
       {error && (
@@ -309,7 +329,31 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                   >
                     <ArrowUpRight /> Original posting
                   </Button>
-                  <FieldGroup className="w-auto flex-row gap-2">
+                  <FieldGroup className="[container-type:normal] w-auto flex-row flex-wrap gap-2">
+                    {job.applicationId ? (
+                      <Button
+                        size="sm"
+                        nativeButton={false}
+                        render={
+                          <Link
+                            href={`/dashboard/jobs?application=${job.applicationId}`}
+                          />
+                        }
+                      >
+                        <Check />{" "}
+                        {job.applicationArchived
+                          ? "View archived application"
+                          : "View application"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => track(job.id, job.matchId)}
+                      >
+                        <Plus /> Track application
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="neutral"
