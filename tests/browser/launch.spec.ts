@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import assert from "node:assert/strict"
+import { writeFileSync } from "node:fs"
 import { randomUUID } from "node:crypto"
 import { ListObjectsV2Command } from "@aws-sdk/client-s3"
 import { createDatabaseClient } from "../../lib/backend/create-db-client"
@@ -16,7 +17,8 @@ const password = `Launch-proof-${randomUUID()}!`
 const users: string[] = []
 let baseline: { id: string; createdAt: Date }[] = []
 let publicRows: { id: string; contentHash: string }[] = []
-const origin = "https://jobsync-cloud.vercel.app"
+const origin =
+  process.env.JOBSYNC_BROWSER_ORIGIN ?? "https://jobsync-cloud.vercel.app"
 
 async function signup(page: Page) {
   await page.goto("/auth/sign-up")
@@ -34,6 +36,11 @@ async function signup(page: Page) {
   const session = await (await page.request.get("/api/auth/get-session")).json()
   assert.ok(session.user.id)
   users.push(session.user.id)
+  if (users.length === 1)
+    writeFileSync(
+      "output/playwright/review-account.json",
+      JSON.stringify({ email, password })
+    )
   // SMTP is an activation gate: this is an explicit admin-only test fixture,
   // scoped by BOTH newly-created session identity and unique fixture email.
   await db.$executeRaw`UPDATE neon_auth."user" SET "emailVerified"=true WHERE id=${session.user.id} AND email=${email}`
@@ -83,7 +90,7 @@ test.beforeAll(async () => {
     )
   )
   baseline = await db.userProfile.findMany({
-    where: {id: {not: "7061368b-e0fa-4f80-beca-f6d0f920dbb1"}},
+    where: { id: { not: "7061368b-e0fa-4f80-beca-f6d0f920dbb1" } },
     select: { id: true, createdAt: true },
     orderBy: { id: "asc" },
   })
@@ -177,7 +184,7 @@ test("@launch production workflow, responsive themes, export, durable deletion a
   test.setTimeout(1_500_000)
   await page.goto("/")
   await expect(
-    page.getByText("No Docker. No API keys. No configuration.", {
+    page.getByText("No card required. No automatic trial charge. No API key.", {
       exact: false,
     })
   ).toBeVisible()
@@ -239,17 +246,20 @@ test("@launch production workflow, responsive themes, export, durable deletion a
     .getByLabel("Target title 1", { exact: true })
     .fill("Software Engineer")
   await page
+    .getByRole("button", { name: "More preferences · optional" })
+    .click()
+  await page
     .getByLabel("Useful skills or keywords")
     .fill("TypeScript, PostgreSQL")
   await page.getByRole("button", { name: "Back to resume" }).click()
-  await page.getByRole("button", { name: "Continue to target roles" }).click()
+  await page.getByRole("button", { name: "Find jobs for me" }).click()
   await expect(page.getByLabel("Target title 1", { exact: true })).toHaveValue(
     "Software Engineer"
   )
-  await page.getByRole("button", { name: "Finish onboarding" }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
+  await page.getByRole("button", { name: "Find jobs for me" }).click()
+  await expect(page).toHaveURL(/\/dashboard\/discover$/)
   await expect(
-    page.getByRole("heading", { name: "Keep things moving." })
+    page.getByRole("heading", { name: "Discover", exact: true })
   ).toBeVisible()
   await page
     .getByRole("link", { name: "Discover", exact: true })
@@ -287,6 +297,57 @@ test("@launch production workflow, responsive themes, export, durable deletion a
     .getByRole("link", { name: "Settings", exact: true })
     .first()
     .click()
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  for (const width of [320, 390, 768, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    for (const theme of ["light", "dark"]) {
+      await page.evaluate((theme) => {
+        localStorage.setItem("theme", theme)
+      }, theme)
+      for (const route of [
+        "/dashboard",
+        "/dashboard/jobs",
+        "/dashboard/discover",
+        "/dashboard/resume",
+        "/dashboard/settings?tab=plan",
+      ]) {
+        await page.goto(route)
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible()
+        expect(
+          await page.evaluate(
+            () => document.documentElement.scrollWidth <= innerWidth
+          ),
+          `${route} ${width} ${theme}`
+        ).toBe(true)
+        await page.screenshot({
+          path: `output/playwright/redesign-${route.split("/").pop()!.split("?")[0]}-${width}-${theme}.png`,
+          fullPage: true,
+        })
+        if (width < 1024) {
+          const dock = page.getByRole("navigation", { name: "Main navigation" })
+          expect(
+            await dock.evaluate((el) => getComputedStyle(el).position)
+          ).toBe("fixed")
+          const active = dock.locator('a[aria-current="page"]')
+          if (await active.count()) {
+            const indicator = dock.locator('[data-slot="navigation-indicator"]')
+            await expect(indicator).toBeVisible()
+            await expect.poll(async () => {
+              const target = await active.boundingBox()
+              const surface = await indicator.boundingBox()
+              return !!target && !!surface &&
+                Math.abs(target.x - surface.x) < 2 &&
+                Math.abs(target.y - surface.y) < 2 &&
+                Math.abs(target.width - surface.width) < 2 &&
+                Math.abs(target.height - surface.height) < 2
+            }).toBe(true)
+          }
+        }
+      }
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await page.goto("/dashboard/settings")
   await page.getByLabel("Display name").fill("Launch proof updated")
   await page.getByRole("button", { name: "Save profile", exact: true }).click()
   await expect(page.getByRole("status")).toContainText("Profile saved")
@@ -321,6 +382,8 @@ test("@launch production workflow, responsive themes, export, durable deletion a
       page.getByRole("navigation", { name: "Main navigation" })
     ).toBeVisible()
   }
+  await page.evaluate(() => localStorage.setItem("theme", "light"))
+  await page.reload()
   await page.getByRole("button", { name: "Toggle color theme" }).first().click()
   await expect(page.locator("html")).toHaveClass(/dark/)
   await page.screenshot({

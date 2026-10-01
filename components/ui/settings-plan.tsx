@@ -99,14 +99,15 @@ export function SettingsPlan({
                     summary.limits.dailyScans,
                   ],
                 ].map(([label, used, limit]) => (
-                  <Card key={label}>
-                    <CardHeader>
-                      <CardDescription>{label}</CardDescription>
-                      <CardTitle className="text-3xl">
-                        {used} / {limit}
-                      </CardTitle>
-                    </CardHeader>
-                  </Card>
+                  <FieldGroup
+                    key={label}
+                    className="gap-2 border-b border-border pb-4"
+                  >
+                    <CardDescription>{label}</CardDescription>
+                    <CardTitle className="text-xl tabular-nums">
+                      {used} / {limit}
+                    </CardTitle>
+                  </FieldGroup>
                 ))}
               </FieldGroup>
             )}

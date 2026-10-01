@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { Check, FileText } from "lucide-react"
+import { Check, FileText } from "@/components/ui/animated-icons"
 import type { OnboardingState } from "@/lib/domain/onboarding/service"
 import {
   resumeContentSchema,
@@ -75,8 +75,6 @@ export function ResumeEditor({
     !data.summary && "Summary",
     !data.skills.length && "Skills",
     !data.employment.length && "Employment",
-    !data.education.length && "Education",
-    !data.credentials.length && "Credentials",
   ].filter(Boolean)
   async function mutate(action: "save" | "confirm") {
     setBusy(true)
@@ -186,14 +184,14 @@ export function ResumeEditor({
           </AlertDescription>
         </Alert>
         {missing.length > 0 && (
-          <CardDescription className="text-amber-800">
+          <CardDescription className="text-amber-800 dark:text-amber-300">
             Check missing sections: {missing.join(", ")}. Only your name and
             some resume content are required; other sections can stay empty.
           </CardDescription>
         )}
         <Tabs value={tab} onValueChange={(value) => setTab(String(value))}>
           <TabsList
-            className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4"
+            className="w-full justify-start"
             aria-label="Resume sections"
           >
             <TabsTrigger value="overview">Contact & overview</TabsTrigger>
@@ -450,7 +448,7 @@ export function ResumeEditor({
             >
               {state.version!.confirmed
                 ? onConfirmed
-                  ? "Continue to target roles"
+                  ? "Find jobs for me"
                   : "Resume confirmed"
                 : "Confirm resume"}
               <Check />

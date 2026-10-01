@@ -16,7 +16,7 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
       data-slot="input-group"
       role="group"
       className={cn(
-        "group/input-group relative flex h-10 w-full min-w-0 items-center rounded-base border-2 border-border bg-secondary-background transition-colors outline-none in-data-[slot=combobox-content]:focus-within:border-inherit in-data-[slot=combobox-content]:focus-within:ring-0 has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-black has-[[data-slot=input-group-control]:focus-visible]:ring-offset-2 has-[[data-slot][aria-invalid=true]]:border-red-500 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
+        "group/input-group relative flex h-10 w-full min-w-0 items-center rounded-base border border-border bg-secondary-background transition-colors outline-none in-data-[slot=combobox-content]:focus-within:border-inherit in-data-[slot=combobox-content]:focus-within:ring-0 has-disabled:opacity-50 has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-ring has-[[data-slot=input-group-control]:focus-visible]:ring-offset-2 has-[[data-slot][aria-invalid=true]]:border-red-500 has-[>[data-align=block-end]]:h-auto has-[>[data-align=block-end]]:flex-col has-[>[data-align=block-start]]:h-auto has-[>[data-align=block-start]]:flex-col has-[>textarea]:h-auto has-[>[data-align=block-end]]:[&>input]:pt-3 has-[>[data-align=block-start]]:[&>input]:pb-3 has-[>[data-align=inline-end]]:[&>input]:pr-1.5 has-[>[data-align=inline-start]]:[&>input]:pl-1.5",
         className,
       )}
       {...props}
@@ -34,9 +34,9 @@ const inputGroupAddonVariants = cva(
         "inline-end":
           "order-last pr-2 has-[>button]:mr-[-0.3rem] has-[>kbd]:mr-[-0.15rem] has-[>button[data-solid]]:m-0 has-[>button[data-solid]]:self-stretch has-[>button[data-solid]]:p-0",
         "block-start":
-          "order-first w-full justify-start px-2.5 pt-2 group-has-[>input]/input-group:pt-2 [.border-b-2]:pb-2",
+          "order-first w-full justify-start px-2.5 pt-2 group-has-[>input]/input-group:pt-2 [.border-b]:pb-2",
         "block-end":
-          "order-last w-full justify-start px-2.5 pb-2 group-has-[>input]/input-group:pb-2 [.border-t-2]:pt-2",
+          "order-last w-full justify-start px-2.5 pb-2 group-has-[>input]/input-group:pb-2 [.border-t]:pt-2",
       },
     },
     defaultVariants: {
@@ -110,7 +110,7 @@ function InputGroupButton({
         inputGroupButtonVariants({ size }),
         ghost && "border-0 bg-transparent",
         solid &&
-          "in-data-[align=inline-end]:h-full! in-data-[align=inline-end]:rounded-none in-data-[align=inline-end]:rounded-r-base in-data-[align=inline-end]:border-0 in-data-[align=inline-end]:border-l-2 in-data-[align=inline-end]:border-border in-data-[align=inline-end]:px-3 in-data-[align=inline-start]:h-full! in-data-[align=inline-start]:rounded-none in-data-[align=inline-start]:rounded-l-base in-data-[align=inline-start]:border-0 in-data-[align=inline-start]:border-r-2 in-data-[align=inline-start]:border-border in-data-[align=inline-start]:px-3",
+          "in-data-[align=inline-end]:h-full! in-data-[align=inline-end]:rounded-none in-data-[align=inline-end]:rounded-r-base in-data-[align=inline-end]:border-0 in-data-[align=inline-end]:border-l in-data-[align=inline-end]:border-border in-data-[align=inline-end]:px-3 in-data-[align=inline-start]:h-full! in-data-[align=inline-start]:rounded-none in-data-[align=inline-start]:rounded-l-base in-data-[align=inline-start]:border-0 in-data-[align=inline-start]:border-r in-data-[align=inline-start]:border-border in-data-[align=inline-start]:px-3",
         className,
       )}
       {...props}

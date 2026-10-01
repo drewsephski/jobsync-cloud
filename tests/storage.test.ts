@@ -553,6 +553,9 @@ test("expired pending uploads settle as expired and cleanup failure does not acc
     UploadError
   )
   assert.equal(repository.records.get(intent.uploadId)?.status, "expired")
+  const status = await uploadService.readStatus(owner, intent.uploadId)
+  assert.equal(status.validation.state, "rejected")
+  assert.match(status.validation.message!, /expired before the file arrived/)
   assert.equal(
     storage.calls.some((call) => call.operation === "head"),
     true

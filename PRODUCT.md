@@ -35,7 +35,7 @@ Users review AI-proposed resume details and edits, choose target roles, explore 
 ## Brand Commitments
 
 - Product name in current app: JobSync Cloud; paid plan: JobSync Plus.
-- The user requests an engaging, minimal shadcn neobrutalist visual style.
+- The user requests a refined, minimal workspace with soft neutral backgrounds, restrained blue accents, thin borders, subtle depth, and a mobile bottom dock.
 
 ## Evidence on Hand
 

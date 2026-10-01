@@ -1,4 +1,4 @@
-import { ArrowRight, Check } from "lucide-react"
+import { ArrowRight, Check } from "@/components/ui/animated-icons"
 import { PublicShell } from "@/components/ui/public-shell"
 import { LinkButton } from "@/components/ui/link-button"
 import {
@@ -10,8 +10,7 @@ import {
   CardFooter,
 } from "@/components/ui/card"
 import { FieldGroup } from "@/components/ui/field"
-import { Item, ItemContent, ItemTitle, ItemGroup } from "@/components/ui/item"
-import { Badge } from "@/components/ui/badge"
+import { ProductFaq } from "@/components/ui/product-faq"
 import {
   billingMode,
   billingRolloutReady,
@@ -20,113 +19,125 @@ import {
 export const metadata = { title: "Pricing" }
 export default function Pricing() {
   const liveBilling = billingMode() && billingRolloutReady()
+  const questions = [
+    [
+      "Will my trial charge me automatically?",
+      "No. Your trial starts after email verification, lasts 14 days, and requires no card. Subscribing is a separate choice.",
+    ],
+    [
+      "What is included, and when do limits reset?",
+      "Resume AI runs and job AI analyses cover the full trial or each subscription billing month. Company watches have a plan maximum; discovery scans reset daily. Job AI analysis is also limited to three starts per UTC day. Unused allowances do not roll over.",
+    ],
+    [
+      "How is AI usage counted?",
+      "An AI run counts when processing starts, including unresolved provider results. AI and discovery may pause for service availability or spend safeguards. Your allowance is visible in Settings.",
+    ],
+    [
+      "Can I cancel anytime?",
+      "Yes. Manage billing in Settings to cancel an active subscription. Your access continues through the paid period; cancellation does not delete your workspace.",
+    ],
+    [
+      "What remains after the trial expires?",
+      liveBilling
+        ? "Your saved records, data export, and original resume downloads remain available. Plus is required to continue AI, discovery, and workspace edits after your trial."
+        : "Plus upgrades are being prepared and live charging is disabled. Existing tracking and resume editing remain available during this rollout. Trial AI and discovery allowances still apply. Saved records, export, and original downloads remain available.",
+    ],
+    [
+      "Do I need to pay for AI separately?",
+      "No API key or separate AI subscription is needed. Usage is included within the allowances shown here.",
+    ],
+  ] as const
   return (
     <PublicShell>
-      <FieldGroup className="gap-10">
-        <FieldGroup className="max-w-2xl gap-5">
-          <Badge variant="neutral" className="w-fit">
-            Simple plans. Clear allowances.
-          </Badge>
+      <FieldGroup className="gap-16 sm:gap-24">
+        <FieldGroup className="mx-auto max-w-2xl gap-5 text-center">
           <CardTitle
             role="heading"
             aria-level={1}
-            className="text-5xl tracking-tight sm:text-6xl"
+            className="text-4xl tracking-tight sm:text-6xl"
           >
-            Start with 14 days.
+            14 days free.
             <br />
-            Keep going for $6.
+            $6/month if it helps.
           </CardTitle>
           <CardDescription className="text-lg">
-            Try the complete workspace. Your trial starts after email
-            verification, without a card or an automatic charge.
+            One simple plan for your next chapter.
+            <br />
+            No card required. No automatic trial charge.
           </CardDescription>
         </FieldGroup>
-        <FieldGroup className="grid gap-7 md:grid-cols-2">
-          {(["trial", "plus"] as const).map((plan) => (
-            <Card key={plan}>
-              <CardHeader>
-                <CardTitle className="text-2xl">
-                  {plan === "trial" ? "14-day trial" : "JobSync Plus"}
-                </CardTitle>
-                <CardTitle className="py-3 text-5xl">
-                  {plan === "trial" ? "$0" : "$6"}
-                  <CardDescription className="mt-2 text-sm">
+        <FieldGroup className="mx-auto max-w-4xl gap-8">
+          <FieldGroup className="grid items-stretch gap-6 md:grid-cols-2">
+            {(["trial", "plus"] as const).map((plan) => (
+              <Card
+                key={plan}
+                className={plan === "plus" ? "border-main/30" : ""}
+              >
+                <CardHeader className="gap-3">
+                  <CardTitle className="text-xl">
+                    {plan === "trial" ? "Try JobSync" : "Keep going with Plus"}
+                  </CardTitle>
+                  <CardTitle className="text-5xl tracking-tight">
+                    {plan === "trial" ? "$0" : "$6"}
+                    <span className="ml-2 text-sm font-normal text-foreground/60">
+                      {plan === "trial" ? "for 14 days" : "/ month"}
+                    </span>
+                  </CardTitle>
+                  <CardDescription>
                     {plan === "trial"
-                      ? "one trial per verified account"
-                      : "USD per month · cancel anytime"}
+                      ? "Starts when you verify your email."
+                      : "USD · cancel anytime"}
                   </CardDescription>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ItemGroup className="gap-2">
-                  {[
-                    "Application tracking, notes, and follow-ups",
-                    "Resume review, editing, and version history",
-                    `${PLAN_LIMITS[plan].resumeRuns} resume AI runs ${plan === "trial" ? "over your trial" : "per billing month"}`,
-                    `${PLAN_LIMITS[plan].jobAnalyses} job AI analyses ${plan === "trial" ? "over your trial" : "per billing month"}`,
-                    `Watch up to ${PLAN_LIMITS[plan].watches} company boards`,
-                    `Up to ${PLAN_LIMITS[plan].dailyScans} discovery scans a day`,
-                  ].map((text) => (
-                    <Item key={text} className="px-0">
-                      <Check className="size-4 shrink-0" />
-                      <ItemContent>
-                        <ItemTitle>{text}</ItemTitle>
-                      </ItemContent>
-                    </Item>
-                  ))}
-                </ItemGroup>
-              </CardContent>
-              <CardFooter>
-                <LinkButton
-                  className="w-full"
-                  href={
-                    plan === "trial"
-                      ? "/auth/sign-up"
-                      : "/dashboard/settings?tab=plan"
-                  }
-                >
-                  {plan === "trial"
-                    ? "Start your free trial"
-                    : liveBilling
-                      ? "Choose Plus"
-                      : "View Plus availability"}
-                  <ArrowRight />
-                </LinkButton>
-              </CardFooter>
-            </Card>
-          ))}
-        </FieldGroup>
-        <Card>
-          <CardHeader>
-            <CardTitle>What happens after the trial?</CardTitle>
-            <CardDescription>
-              {liveBilling
-                ? "Choose Plus to continue AI, discovery, and workspace edits after your trial. Subscribing is a separate choice; your trial never charges automatically."
-                : "Plus upgrades are being prepared. Live charging is currently disabled. Your existing tracking and resume editing remain available during this rollout; trial AI and discovery allowances still apply."}
+                </CardHeader>
+                <CardContent className="flex-1">
+                  <FieldGroup className="gap-3">
+                    {[
+                      "Application tracking, notes, and follow-ups",
+                      "Resume review and version history",
+                      `${PLAN_LIMITS[plan].resumeRuns} resume AI runs ${plan === "trial" ? "during your trial" : "per billing month"}`,
+                      `${PLAN_LIMITS[plan].jobAnalyses} job AI analyses ${plan === "trial" ? "during your trial" : "per billing month"}`,
+                      `Watch up to ${PLAN_LIMITS[plan].watches} companies`,
+                      `Up to ${PLAN_LIMITS[plan].dailyScans} discovery scans a day`,
+                    ].map((text) => (
+                      <FieldGroup
+                        key={text}
+                        className="flex-row items-start gap-3 text-sm"
+                      >
+                        <Check className="mt-0.5 size-4 shrink-0 text-main" />
+                        <span>{text}</span>
+                      </FieldGroup>
+                    ))}
+                  </FieldGroup>
+                </CardContent>
+                <CardFooter>
+                  <LinkButton
+                    className="w-full"
+                    href={
+                      plan === "trial"
+                        ? "/auth/sign-up"
+                        : "/dashboard/settings?tab=plan"
+                    }
+                    variant={plan === "trial" ? "default" : "neutral"}
+                  >
+                    {plan === "trial"
+                      ? "Start your free trial"
+                      : liveBilling
+                        ? "Choose Plus"
+                        : "View Plus availability"}
+                    <ArrowRight />
+                  </LinkButton>
+                </CardFooter>
+              </Card>
+            ))}
+          </FieldGroup>
+          {!liveBilling && (
+            <CardDescription className="text-center text-sm">
+              Plus upgrades are being prepared. Live charging is currently
+              disabled.
             </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FieldGroup className="gap-4">
-              <CardDescription>
-                Plus allowances reset each subscription billing month. Trial
-                allowances cover the full 14 days. Unused allowances do not roll
-                over. AI and discovery can pause for service availability or
-                spend safeguards. AI use is counted when processing starts,
-                including unresolved provider results. Job AI analysis is also
-                limited to three starts per UTC day.
-              </CardDescription>
-              <CardDescription>
-                Discovery checks supported public company boards; it does not
-                search every job site. Results may take a background refresh to
-                appear. JobSync does not apply to jobs for you.
-              </CardDescription>
-              <CardDescription>
-                Subscribing is a separate choice. Cancel through Settings →
-                Manage billing to keep Plus through the end of your paid period.
-              </CardDescription>
-            </FieldGroup>
-          </CardContent>
-        </Card>
+          )}
+        </FieldGroup>
+        <ProductFaq title="Simple billing. Clear answers." items={questions} />
       </FieldGroup>
     </PublicShell>
   )

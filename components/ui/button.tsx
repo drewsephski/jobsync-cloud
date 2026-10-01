@@ -6,26 +6,26 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 rounded-base text-sm font-base whitespace-nowrap ring-offset-background transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
+  "inline-flex items-center justify-center gap-2 rounded-base text-sm font-base whitespace-nowrap ring-offset-background transition-all focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50 data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_[data-slot=animated-icon]]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        destructive: "border-2 border-border bg-foreground text-secondary-background shadow-shadow hover:shadow-none",
+        destructive: "border border-border bg-red-600 text-white hover:bg-red-700 border-transparent",
         default:
-          "border-2 border-border bg-main text-main-foreground shadow-shadow hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none",
-        noShadow: "border-2 border-border bg-main text-main-foreground",
+          "border border-transparent bg-main text-main-foreground shadow-shadow hover:bg-main/90",
+        noShadow: "border border-transparent bg-main text-main-foreground",
         neutral:
-          "border-2 border-border bg-secondary-background text-foreground shadow-shadow hover:translate-x-boxShadowX hover:translate-y-boxShadowY hover:shadow-none",
+          "border border-border bg-secondary-background text-foreground hover:bg-background",
         reverse:
-          "border-2 border-border bg-main text-main-foreground hover:translate-x-reverseBoxShadowX hover:translate-y-reverseBoxShadowY hover:shadow-shadow",
+          "border border-transparent bg-main text-main-foreground hover:bg-main/90",
       },
       size: {
         default: "h-10 px-4 py-2",
-        xs: "h-8 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5",
+        xs: "h-8 gap-1.5 px-2.5 text-xs [&_svg]:size-3.5 [&_[data-slot=animated-icon]]:size-3.5",
         sm: "h-9 px-3",
         lg: "h-11 px-8",
         icon: "size-10",
-        "icon-xs": "size-8 [&_svg]:size-3.5",
+        "icon-xs": "size-8 [&_svg]:size-3.5 [&_[data-slot=animated-icon]]:size-3.5",
         "icon-sm": "size-9",
         "icon-lg": "size-11",
       },

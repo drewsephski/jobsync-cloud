@@ -8,7 +8,7 @@ import {
   RefreshCw,
   Briefcase,
   Clock,
-} from "lucide-react"
+} from "@/components/ui/animated-icons"
 import type { ApplicationsData } from "@/lib/domain/applications/service"
 import {
   statusLabels,
@@ -26,7 +26,6 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
-  CardContent,
   CardFooter,
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -117,12 +116,9 @@ export function ApplicationTracker({
     { value: "archived", label: "Archived" },
   ]
   return (
-    <FieldGroup className="onboarding-surface discovery-surface mx-auto max-w-6xl gap-7 py-6 sm:px-4">
+    <FieldGroup className="onboarding-surface discovery-surface mx-auto max-w-6xl gap-7">
       <FieldGroup className="flex-row flex-wrap items-start justify-between gap-4">
         <FieldGroup className="min-w-0 flex-1 basis-full gap-2 sm:basis-0">
-          <CardDescription className="text-xs tracking-widest uppercase">
-            Your search, moving forward
-          </CardDescription>
           <CardTitle
             role="heading"
             aria-level={1}
@@ -152,27 +148,27 @@ export function ApplicationTracker({
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <FieldGroup className="grid gap-3 sm:grid-cols-3">
-        {[
-          ["Active applications", active.length],
-          [
-            "In interviews",
-            active.filter((a) => a.status === "interview").length,
-          ],
-          [
-            "Follow-ups due",
-            active.filter((a) => a.followUpOn && a.followUpOn <= data.today)
-              .length,
-          ],
-        ].map(([label, value]) => (
-          <Card key={label}>
-            <CardContent className="pt-5">
+      {active.length > 0 && (
+        <FieldGroup className="grid grid-cols-3 gap-4 border-y border-border py-5">
+          {[
+            ["Active applications", active.length],
+            [
+              "In interviews",
+              active.filter((a) => a.status === "interview").length,
+            ],
+            [
+              "Follow-ups due",
+              active.filter((a) => a.followUpOn && a.followUpOn <= data.today)
+                .length,
+            ],
+          ].map(([label, value]) => (
+            <FieldGroup key={label} className="gap-2">
               <CardDescription className="text-xs">{label}</CardDescription>
-              <CardTitle className="mt-2 text-2xl">{value}</CardTitle>
-            </CardContent>
-          </Card>
-        ))}
-      </FieldGroup>
+              <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+            </FieldGroup>
+          ))}
+        </FieldGroup>
+      )}
       <FieldGroup className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_220px_auto]">
         <Field>
           <FieldLabel htmlFor="application-search">

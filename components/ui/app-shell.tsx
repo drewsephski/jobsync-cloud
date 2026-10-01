@@ -1,5 +1,6 @@
 "use client"
 
+import { useLayoutEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -9,14 +10,14 @@ import {
   FileText,
   Settings,
   LogOut,
-} from "lucide-react"
+} from "@/components/ui/animated-icons"
 import { MotionConfig, motion, useReducedMotion } from "motion/react"
 import { Button } from "./button"
 import { ThemeToggle } from "./theme-toggle"
 import { FieldGroup } from "./field"
 import { CardDescription } from "./card"
 import { LinkButton } from "./link-button"
-import { Badge } from "./badge"
+import { Logo } from "./logo"
 import { cn } from "@/lib/utils"
 import { signOut } from "@/app/auth/actions"
 
@@ -40,23 +41,54 @@ export function AppShell({
 }) {
   const pathname = usePathname()
   const reduced = useReducedMotion()
+  const navigationRef = useRef<HTMLElement>(null)
+  const [indicator, setIndicator] = useState<{
+    x: number
+    y: number
+    width: number
+    height: number
+  } | null>(null)
+  const settingsActive =
+    pathname === "/dashboard/settings" ||
+    pathname.startsWith("/dashboard/settings/") ||
+    pathname === "/dashboard/billing"
+
+  // Keep one indicator mounted and measure inside navigation so sticky/fixed
+  // positioning and document scrolling do not affect the slide target.
+  useLayoutEffect(() => {
+    const navigation = navigationRef.current
+    if (!navigation) return
+    const active = navigation.querySelector<HTMLAnchorElement>(
+      'a[aria-current="page"]'
+    )
+    const measure = () => {
+      setIndicator(
+        active
+          ? {
+              x: active.offsetLeft,
+              y: active.offsetTop,
+              width: active.offsetWidth,
+              height: active.offsetHeight,
+            }
+          : null
+      )
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(navigation)
+    if (active) observer.observe(active)
+    return () => observer.disconnect()
+  }, [pathname])
+
   return (
     <MotionConfig reducedMotion="user">
       <Link className="skip-link" href="#workspace">
         Skip to workspace
       </Link>
-      <FieldGroup className="app-shell gap-0 lg:grid lg:grid-cols-[216px_minmax(0,1fr)]">
-        <FieldGroup className="shell-sidebar gap-6 border-b-2 border-border bg-secondary-background px-4 py-5 lg:sticky lg:top-0 lg:h-svh lg:border-r-2 lg:border-b-0 lg:px-5 lg:py-8">
+      <FieldGroup className="app-shell gap-0 lg:grid lg:grid-cols-[224px_minmax(0,1fr)]">
+        <FieldGroup className="shell-sidebar gap-6 border-b border-border bg-secondary-background px-4 py-5 lg:sticky lg:top-0 lg:h-svh lg:border-r lg:border-b-0 lg:px-5 lg:py-8">
           <FieldGroup className="flex-row items-center justify-between gap-3">
-            <Link
-              href="/dashboard"
-              className="text-xl font-heading tracking-tight"
-            >
-              JobSync{" "}
-              <Badge variant="neutral" className="text-[10px]">
-                Cloud
-              </Badge>
-            </Link>
+            <Logo href="/dashboard" />
             <FieldGroup className="[container-type:normal] w-auto shrink-0 flex-row items-center gap-2 lg:hidden">
               <ThemeToggle />
               <LinkButton
@@ -64,20 +96,38 @@ export function AppShell({
                 variant="neutral"
                 size="icon-sm"
                 aria-label="Settings"
+                aria-current={settingsActive ? "page" : undefined}
+                className={settingsActive ? "bg-main/10 text-main" : undefined}
               >
                 <Settings />
               </LinkButton>
             </FieldGroup>
           </FieldGroup>
           <nav
+            ref={navigationRef}
             aria-label="Main navigation"
-            className="grid grid-cols-4 gap-2 lg:flex lg:flex-col"
+            className="app-navigation relative isolate grid grid-cols-4 gap-2 lg:flex lg:flex-col"
           >
+            {indicator && (
+              <motion.span
+                data-slot="navigation-indicator"
+                aria-hidden="true"
+                initial={false}
+                style={{ width: indicator.width, height: indicator.height }}
+                animate={{ x: indicator.x, y: indicator.y }}
+                transition={{
+                  type: "tween",
+                  duration: reduced ? 0 : 0.22,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+                className="pointer-events-none absolute top-0 left-0 rounded-base bg-main/10"
+              />
+            )}
             {destinations.map(({ label, href, icon: Icon }) => {
               const active =
                 href === "/dashboard"
                   ? pathname === href
-                  : pathname.startsWith(href)
+                  : pathname === href || pathname.startsWith(`${href}/`)
               return (
                 <Link
                   key={href}
@@ -85,16 +135,11 @@ export function AppShell({
                   aria-current={active ? "page" : undefined}
                   className={cn(
                     "relative flex min-h-12 flex-col items-center justify-center gap-1 rounded-base px-2 text-xs font-heading outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 lg:flex-row lg:justify-start lg:gap-3 lg:px-3 lg:text-sm",
-                    active ? "text-main-foreground" : "hover:bg-background"
+                    active
+                      ? cn("text-main", !indicator && "bg-main/10")
+                      : "hover:bg-background"
                   )}
                 >
-                  {active && (
-                    <motion.span
-                      layoutId="active-navigation"
-                      transition={{ duration: reduced ? 0 : 0.18 }}
-                      className="absolute inset-0 rounded-base border-2 border-border bg-main"
-                    />
-                  )}
                   <Icon className="relative size-4" />
                   <span className="relative">{label}</span>
                 </Link>
@@ -106,7 +151,7 @@ export function AppShell({
             <CardDescription className="text-xs">{planLabel}</CardDescription>
             {!complete && (
               <LinkButton href="/onboarding" size="sm">
-                Finish setup
+                Continue with resume
               </LinkButton>
             )}
             <FieldGroup className="flex-row items-center justify-between gap-2">
@@ -114,11 +159,8 @@ export function AppShell({
                 href="/dashboard/settings"
                 variant="neutral"
                 size="sm"
-                aria-current={
-                  pathname.startsWith("/dashboard/settings")
-                    ? "page"
-                    : undefined
-                }
+                aria-current={settingsActive ? "page" : undefined}
+                className={settingsActive ? "bg-main/10 text-main" : undefined}
               >
                 <Settings /> Settings
               </LinkButton>
@@ -153,7 +195,7 @@ export function AppShell({
         <main
           id="workspace"
           tabIndex={-1}
-          className="min-w-0 px-4 py-6 outline-none sm:px-8 lg:px-10 lg:py-10"
+          className="app-workspace min-w-0 px-4 py-6 outline-none sm:px-8 lg:px-10 lg:py-10"
         >
           <FieldGroup className="mx-auto w-full max-w-6xl gap-0">
             <CardDescription className="mb-6 text-xs lg:hidden">

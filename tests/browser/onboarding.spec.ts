@@ -99,18 +99,20 @@ test.afterAll(async () => {
 async function signup(page: Page) {
   await page.goto("/auth/sign-up")
   await page.getByLabel("Name", { exact: true }).fill("JobSync isolated proof")
-  await page
-    .getByLabel("Email address")
-    .fill(`jobsync-browser-${randomUUID()}@example.com`)
+  const email = `jobsync-browser-${randomUUID()}@example.com`
+  await page.getByLabel("Email address").fill(email)
   await page.getByLabel("Password", { exact: true }).fill(password)
   await page
     .getByRole("button", { name: "Create Account", exact: true })
     .click()
-  await expect(page).toHaveURL(/\/onboarding$/)
+  await expect(page).toHaveURL(/\/auth\/verify$/)
   const session = await (await page.request.get("/api/auth/get-session")).json()
   users.push(session.user.id)
+  // Admin-only activation fixture, scoped to this new session and unique email.
+  await db.$executeRaw`UPDATE neon_auth."user" SET "emailVerified"=true WHERE id=${session.user.id} AND email=${email}`
+  await page.goto("/onboarding")
   await expect(
-    page.getByRole("heading", { name: "Start with your experience." })
+    page.getByRole("heading", { name: "Upload your resume." })
   ).toBeVisible()
   return session.user.id as string
 }
@@ -170,7 +172,9 @@ async function seededDraft(owner: string) {
 async function directRoutes(page: Page, expected: RegExp) {
   for (const route of ["/dashboard", "/dashboard/resume"]) {
     await page.goto(route)
-    await expect(page).toHaveURL(expected)
+    await expect(page).toHaveURL(
+      route === "/dashboard" ? /\/dashboard$/ : expected
+    )
   }
 }
 async function resumeAndPreferences(
@@ -277,7 +281,7 @@ async function resumeAndPreferences(
     .getByLabel("Target title 1", { exact: true })
     .fill("Backend Engineer")
   await page.getByRole("button", { name: "Back to resume" }).click()
-  await page.getByRole("button", { name: "Continue to target roles" }).click()
+  await page.getByRole("button", { name: "Find jobs for me" }).click()
   await expect(page.getByLabel("Target title 1", { exact: true })).toHaveValue(
     "Backend Engineer"
   )
@@ -285,19 +289,25 @@ async function resumeAndPreferences(
   await page
     .getByLabel("Target title 2", { exact: true })
     .fill("Platform Engineer")
+  await page
+    .getByRole("button", { name: "More preferences · optional" })
+    .click()
   await page.getByLabel("Locations", { exact: true }).fill("Chicago, Austin")
   await page.getByRole("radio", { name: "Prefer remote", exact: true }).click()
   await page.getByLabel("Minimum annual salary · USD").fill("95000")
   await page
     .getByLabel("Useful skills or keywords")
     .fill("TypeScript, PostgreSQL")
-  await page.getByRole("button", { name: "Save for later" }).click()
+  await page.getByRole("button", { name: "Save preferences" }).click()
   await expect(page.getByRole("status")).toContainText("Preferences saved")
   await page.reload()
   await expect(page.getByLabel("Target title 2", { exact: true })).toHaveValue(
     "Platform Engineer"
   )
   await expect(page.getByLabel("Target title 2", { exact: true })).toBeVisible()
+  await page
+    .getByRole("button", { name: "More preferences · optional" })
+    .click()
   await expect(page.getByLabel("Locations", { exact: true })).toHaveValue(
     "Chicago, Austin"
   )
@@ -305,10 +315,10 @@ async function resumeAndPreferences(
     path: "output/playwright/target-preferences-mobile.png",
     fullPage: true,
   })
-  await page.getByRole("button", { name: "Finish onboarding" }).click()
-  await expect(page).toHaveURL(/\/dashboard$/)
+  await page.getByRole("button", { name: "Find jobs for me" }).click()
+  await expect(page).toHaveURL(/\/dashboard\/discover$/)
   await expect(
-    page.getByRole("heading", { name: "Keep things moving.", exact: true })
+    page.getByRole("heading", { name: "Discover", exact: true })
   ).toBeVisible()
   const completed = await state(page)
   expect(completed.targets).toHaveLength(2)
@@ -347,6 +357,89 @@ test("@fixture durable resume review, stale tabs, mobile keyboard, route guards,
   await page.reload()
   await resumeAndPreferences(page, context, owner, false)
 })
+
+test("@fixture sidebar indicator persists across routes, history, refresh and responsive layouts", async ({
+  page,
+}) => {
+  const owner = await signup(page)
+  await seededDraft(owner)
+  await page.reload()
+  await page.getByRole("checkbox").check()
+  await page
+    .getByRole("button", { name: "Confirm resume", exact: true })
+    .click()
+  await page
+    .getByLabel("Target title 1", { exact: true })
+    .fill("Backend Engineer")
+  await page.getByRole("button", { name: "Find jobs for me" }).click()
+  await expect(page).toHaveURL(/\/dashboard\/discover$/)
+
+  const navigation = page.getByRole("navigation", { name: "Main navigation" })
+  const indicator = navigation.locator('[data-slot="navigation-indicator"]')
+  async function selected(label: string) {
+    const link = navigation.getByRole("link", { name: label, exact: true })
+    await expect(link).toHaveAttribute("aria-current", "page")
+    await expect(navigation.locator('[aria-current="page"]')).toHaveCount(1)
+    await expect(indicator).toHaveCount(1)
+    await expect(indicator).toBeVisible()
+    await expect
+      .poll(async () => {
+        const target = await link.boundingBox()
+        const marker = await indicator.boundingBox()
+        if (!target || !marker) return Infinity
+        return Math.max(
+          Math.abs(target.x - marker.x),
+          Math.abs(target.y - marker.y),
+          Math.abs(target.width - marker.width),
+          Math.abs(target.height - marker.height)
+        )
+      })
+      .toBeLessThan(1)
+    expect(
+      await indicator.evaluate((element) => getComputedStyle(element).opacity)
+    ).toBe("1")
+    expect(
+      await indicator.evaluate(
+        (element) => getComputedStyle(element).backgroundColor
+      )
+    ).not.toBe("rgba(0, 0, 0, 0)")
+  }
+
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await selected("Discover")
+  await indicator.evaluate((element) =>
+    element.setAttribute("data-proof", "persistent")
+  )
+  for (const label of ["Home", "Jobs", "Resume", "Discover"]) {
+    await navigation.getByRole("link", { name: label, exact: true }).click()
+    await selected(label)
+    await expect(indicator).toHaveAttribute("data-proof", "persistent")
+  }
+  await page.goBack()
+  await selected("Resume")
+  await page.reload()
+  await selected("Resume")
+
+  await page.getByRole("link", { name: "Settings", exact: true }).click()
+  await expect(
+    page.getByRole("link", { name: "Settings", exact: true })
+  ).toHaveAttribute("aria-current", "page")
+  await expect(indicator).toHaveCount(0)
+  await navigation.getByRole("link", { name: "Home", exact: true }).click()
+  await selected("Home")
+
+  await page.setViewportSize({ width: 390, height: 844 })
+  await selected("Home")
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await navigation.getByRole("link", { name: "Jobs", exact: true }).click()
+  await selected("Jobs")
+  await page.emulateMedia({ reducedMotion: "reduce" })
+  await navigation.getByRole("link", { name: "Resume", exact: true }).click()
+  await selected("Resume")
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await selected("Resume")
+})
+
 test("@live signup → upload → real AI draft → review → confirm → roles → dashboard; tenant isolation", async ({
   page,
   context,

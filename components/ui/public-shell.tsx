@@ -1,26 +1,31 @@
+"use client"
+
 import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { Logo } from "./logo"
 import { FieldGroup } from "./field"
 import { LinkButton } from "./link-button"
 import { ThemeToggle } from "./theme-toggle"
 
 export function PublicShell({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   return (
     <FieldGroup className="min-h-svh gap-0">
-      <header className="border-b-2 border-border bg-secondary-background">
-        <FieldGroup className="mx-auto max-w-6xl flex-row flex-wrap items-center justify-between gap-4 px-5 py-5 sm:px-8">
-          <Link href="/" className="text-xl font-heading tracking-tight">
-            JobSync Cloud
-          </Link>
+      <header className="border-b border-border bg-secondary-background">
+        <FieldGroup className="mx-auto max-w-6xl flex-row items-center justify-between gap-3 px-4 py-4 sm:px-8">
+          <Logo className="max-[360px]:gap-1.5 max-[360px]:text-base" />
           <nav
             aria-label="Public navigation"
-            className="flex items-center gap-3"
+            className="flex shrink-0 items-center gap-2 sm:gap-4"
           >
-            <Link
-              href="/pricing"
-              className="text-sm font-heading hover:underline"
-            >
-              Pricing
-            </Link>
+            {pathname !== "/pricing" && (
+              <Link
+                href="/pricing"
+                className="text-sm font-heading hover:underline max-[360px]:hidden"
+              >
+                Pricing
+              </Link>
+            )}
             <LinkButton href="/auth/sign-in" variant="neutral" size="sm">
               Sign in
             </LinkButton>
@@ -31,11 +36,14 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
       <main className="mx-auto w-full max-w-6xl flex-1 px-5 py-12 sm:px-8 sm:py-20">
         {children}
       </main>
-      <footer className="border-t-2 border-border bg-secondary-background">
+      <footer className="border-t border-border bg-secondary-background">
         <FieldGroup className="mx-auto max-w-6xl flex-row flex-wrap items-center justify-between gap-5 px-5 py-6 sm:px-8">
-          <Link href="/" className="text-sm font-heading">
-            Your job search, together.
-          </Link>
+          <FieldGroup className="[container-type:normal] w-full gap-3 sm:w-auto">
+            <Logo />
+            <span className="text-xs text-foreground/60">
+              A little clarity for your next chapter.
+            </span>
+          </FieldGroup>
           <nav aria-label="Legal navigation" className="flex gap-5 text-sm">
             <Link href="/pricing">Pricing</Link>
             <Link href="/privacy">Privacy</Link>

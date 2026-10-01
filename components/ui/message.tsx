@@ -35,7 +35,7 @@ function MessageAvatar({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="message-avatar"
       className={cn(
-        "flex size-10 shrink-0 items-center justify-center self-start overflow-hidden rounded-full border-2 border-border bg-background [&_[data-slot=avatar]]:size-full [&_[data-slot=avatar]]:outline-0 [&_[data-slot=avatar-fallback]]:bg-background",
+        "flex size-10 shrink-0 items-center justify-center self-start overflow-hidden rounded-full border border-border bg-background [&_[data-slot=avatar]]:size-full [&_[data-slot=avatar]]:outline-0 [&_[data-slot=avatar-fallback]]:bg-background",
         className,
       )}
       {...props}

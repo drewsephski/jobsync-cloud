@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { ArrowRight, Plus, Trash2 } from "lucide-react"
+import { ArrowRight, Plus, Trash2 } from "@/components/ui/animated-icons"
 import type { OnboardingState } from "@/lib/domain/onboarding/service"
 import { preferencesSchema } from "@/lib/domain/onboarding/schema"
 import {
@@ -10,6 +10,12 @@ import {
   onboardingRequest,
   OnboardingRequestError,
 } from "./onboarding-api"
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/ui/accordion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -32,7 +38,11 @@ export function TargetPreferences({
   const [titles, setTitles] = useState(
     initialState.targets.length
       ? initialState.targets.map((target) => target.targetTitle)
-      : [""]
+      : [
+          initialState.version?.data.employment.find((entry) =>
+            entry.title?.trim()
+          )?.title ?? "",
+        ]
   )
   const first = initialState.targets[0]
   const [location, setLocation] = useState(first?.location ?? "")
@@ -101,7 +111,7 @@ export function TargetPreferences({
     try {
       const next = await onboardingRequest("preferences", input)
       if (complete) {
-        router.replace("/dashboard")
+        router.replace("/dashboard/discover")
         router.refresh()
       } else {
         onSaved(next)
@@ -122,8 +132,8 @@ export function TargetPreferences({
         <Alert className="review-guidance">
           <AlertTitle>Your resume is confirmed</AlertTitle>
           <AlertDescription>
-            Now give your search a direction. Choose a few roles; the remaining
-            preferences are optional.
+            Choose a starting role below. You can change it and refine locations
+            later in Discover.
           </AlertDescription>
         </Alert>
         <FieldGroup className="gap-3">
@@ -131,7 +141,8 @@ export function TargetPreferences({
             Which roles are you looking for?
           </CardTitle>
           <CardDescription>
-            Use job titles you would search for. Add up to 10.
+            We suggest a title from your confirmed experience when available.
+            Keep it or choose what you want next.
           </CardDescription>
           {titles.map((title, index) => (
             <FieldGroup key={index} className="flex-row items-end gap-2">
@@ -173,84 +184,92 @@ export function TargetPreferences({
             <Plus /> Add another role
           </Button>
         </FieldGroup>
-        <FieldGroup className="gap-5 border-t border-slate-200 pt-6">
-          <CardTitle role="heading" aria-level={2}>
-            A few preferences · optional
-          </CardTitle>
-          <CardDescription>
-            These apply to all the roles above. Leave anything open if you are
-            flexible.
-          </CardDescription>
-          <Field>
-            <FieldLabel htmlFor="target-locations">Locations</FieldLabel>
-            <Input
-              id="target-locations"
-              placeholder="e.g. Chicago, Austin"
-              value={location}
-              maxLength={500}
-              onChange={(event) => setLocation(event.target.value)}
-            />
-            <CardDescription className="text-xs">
-              Separate multiple cities or regions with commas.
-            </CardDescription>
-          </Field>
-          <Field>
-            <FieldLabel id="remote-label">Work arrangement</FieldLabel>
-            <RadioGroup
-              aria-labelledby="remote-label"
-              value={remote}
-              onValueChange={(value) => setRemote(String(value))}
-              className="flex flex-wrap gap-4"
-            >
-              {[
-                ["any", "Flexible"],
-                ["remote", "Prefer remote"],
-                ["onsite", "Prefer on-site / hybrid"],
-              ].map(([value, label]) => (
-                <Field key={value} orientation="horizontal" className="w-auto">
-                  <RadioGroupItem value={value} id={`remote-${value}`} />
-                  <FieldLabel
-                    htmlFor={`remote-${value}`}
-                    className="font-normal"
-                  >
-                    {label}
-                  </FieldLabel>
+        <Accordion type="single" collapsible>
+          <AccordionItem value="preferences">
+            <AccordionTrigger>More preferences · optional</AccordionTrigger>
+            <AccordionContent>
+              <FieldGroup className="gap-5 pt-3">
+                <CardDescription>
+                  These apply to all the roles above. Leave anything open if you
+                  are flexible.
+                </CardDescription>
+                <Field>
+                  <FieldLabel htmlFor="target-locations">Locations</FieldLabel>
+                  <Input
+                    id="target-locations"
+                    placeholder="e.g. Chicago, Austin"
+                    value={location}
+                    maxLength={500}
+                    onChange={(event) => setLocation(event.target.value)}
+                  />
+                  <CardDescription className="text-xs">
+                    Separate multiple cities or regions with commas.
+                  </CardDescription>
                 </Field>
-              ))}
-            </RadioGroup>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="target-compensation">
-              Minimum annual salary · USD
-            </FieldLabel>
-            <Input
-              id="target-compensation"
-              type="number"
-              min={0}
-              max={10000000}
-              step={1}
-              inputMode="numeric"
-              placeholder="e.g. 90000"
-              value={compensation}
-              onChange={(event) => setCompensation(event.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="target-keywords">
-              Useful skills or keywords
-            </FieldLabel>
-            <Textarea
-              id="target-keywords"
-              rows={2}
-              placeholder="e.g. TypeScript, accessibility, SaaS"
-              value={keywords}
-              onChange={(event) => setKeywords(event.target.value)}
-            />
-            <CardDescription className="text-xs">
-              Separate up to 30 keywords with commas.
-            </CardDescription>
-          </Field>
-        </FieldGroup>
+                <Field>
+                  <FieldLabel id="remote-label">Work arrangement</FieldLabel>
+                  <RadioGroup
+                    aria-labelledby="remote-label"
+                    value={remote}
+                    onValueChange={(value) => setRemote(String(value))}
+                    className="flex flex-wrap gap-4"
+                  >
+                    {[
+                      ["any", "Flexible"],
+                      ["remote", "Prefer remote"],
+                      ["onsite", "Prefer on-site / hybrid"],
+                    ].map(([value, label]) => (
+                      <Field
+                        key={value}
+                        orientation="horizontal"
+                        className="w-auto"
+                      >
+                        <RadioGroupItem value={value} id={`remote-${value}`} />
+                        <FieldLabel
+                          htmlFor={`remote-${value}`}
+                          className="font-normal"
+                        >
+                          {label}
+                        </FieldLabel>
+                      </Field>
+                    ))}
+                  </RadioGroup>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="target-compensation">
+                    Minimum annual salary · USD
+                  </FieldLabel>
+                  <Input
+                    id="target-compensation"
+                    type="number"
+                    min={0}
+                    max={10000000}
+                    step={1}
+                    inputMode="numeric"
+                    placeholder="e.g. 90000"
+                    value={compensation}
+                    onChange={(event) => setCompensation(event.target.value)}
+                  />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="target-keywords">
+                    Useful skills or keywords
+                  </FieldLabel>
+                  <Textarea
+                    id="target-keywords"
+                    rows={2}
+                    placeholder="e.g. TypeScript, accessibility, SaaS"
+                    value={keywords}
+                    onChange={(event) => setKeywords(event.target.value)}
+                  />
+                  <CardDescription className="text-xs">
+                    Separate up to 30 keywords with commas.
+                  </CardDescription>
+                </Field>
+              </FieldGroup>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
         {error && (
           <Alert variant="destructive" role="alert">
             <AlertTitle>Unable to save preferences</AlertTitle>
@@ -271,14 +290,14 @@ export function TargetPreferences({
         </CardDescription>
         <FieldGroup className="flex-row flex-wrap gap-3">
           <Button onClick={() => save(true)} disabled={busy || conflict}>
-            Finish onboarding <ArrowRight />
+            Find jobs for me <ArrowRight />
           </Button>
           <Button
             variant="neutral"
             onClick={() => save(false)}
             disabled={busy || conflict}
           >
-            Save for later
+            Save preferences
           </Button>
           <Button variant="neutral" onClick={onReview} disabled={busy}>
             Back to resume

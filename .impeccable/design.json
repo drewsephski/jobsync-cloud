@@ -1,0 +1,533 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-01T14:55:00.584243+00:00",
+  "title": "Design System: JobSync Cloud",
+  "extensions": {
+    "colorMeta": {
+      "main": {
+        "role": "primary",
+        "displayName": "Main",
+        "canonical": "#2563eb",
+        "tonalRamp": [
+          "oklch(15% 0.21521 262.88)",
+          "oklch(26% 0.21521 262.88)",
+          "oklch(38% 0.21521 262.88)",
+          "oklch(49% 0.21521 262.88)",
+          "oklch(61% 0.21521 262.88)",
+          "oklch(72% 0.21521 262.88)",
+          "oklch(84% 0.21521 262.88)",
+          "oklch(95% 0.21521 262.88)"
+        ]
+      },
+      "main-foreground": {
+        "role": "neutral",
+        "displayName": "Main Foreground",
+        "canonical": "#ffffff",
+        "tonalRamp": [
+          "oklch(15% 0.00000 89.88)",
+          "oklch(26% 0.00000 89.88)",
+          "oklch(38% 0.00000 89.88)",
+          "oklch(49% 0.00000 89.88)",
+          "oklch(61% 0.00000 89.88)",
+          "oklch(72% 0.00000 89.88)",
+          "oklch(84% 0.00000 89.88)",
+          "oklch(95% 0.00000 89.88)"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Background",
+        "canonical": "#f7f8fa",
+        "tonalRamp": [
+          "oklch(15% 0.00287 264.54)",
+          "oklch(26% 0.00287 264.54)",
+          "oklch(38% 0.00287 264.54)",
+          "oklch(49% 0.00287 264.54)",
+          "oklch(61% 0.00287 264.54)",
+          "oklch(72% 0.00287 264.54)",
+          "oklch(84% 0.00287 264.54)",
+          "oklch(95% 0.00287 264.54)"
+        ]
+      },
+      "secondary-background": {
+        "role": "neutral",
+        "displayName": "Secondary Background",
+        "canonical": "oklch(100% 0 0)",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(26% 0.00000 0.00)",
+          "oklch(38% 0.00000 0.00)",
+          "oklch(49% 0.00000 0.00)",
+          "oklch(61% 0.00000 0.00)",
+          "oklch(72% 0.00000 0.00)",
+          "oklch(84% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "foreground": {
+        "role": "neutral",
+        "displayName": "Foreground",
+        "canonical": "#182230",
+        "tonalRamp": [
+          "oklch(15% 0.03038 256.86)",
+          "oklch(26% 0.03038 256.86)",
+          "oklch(38% 0.03038 256.86)",
+          "oklch(49% 0.03038 256.86)",
+          "oklch(61% 0.03038 256.86)",
+          "oklch(72% 0.03038 256.86)",
+          "oklch(84% 0.03038 256.86)",
+          "oklch(95% 0.03038 256.86)"
+        ]
+      },
+      "border": {
+        "role": "neutral",
+        "displayName": "Border",
+        "canonical": "#e2e6ec",
+        "tonalRamp": [
+          "oklch(15% 0.00920 258.34)",
+          "oklch(26% 0.00920 258.34)",
+          "oklch(38% 0.00920 258.34)",
+          "oklch(49% 0.00920 258.34)",
+          "oklch(61% 0.00920 258.34)",
+          "oklch(72% 0.00920 258.34)",
+          "oklch(84% 0.00920 258.34)",
+          "oklch(95% 0.00920 258.34)"
+        ]
+      },
+      "ring": {
+        "role": "primary",
+        "displayName": "Ring",
+        "canonical": "#2563eb",
+        "tonalRamp": [
+          "oklch(15% 0.21521 262.88)",
+          "oklch(26% 0.21521 262.88)",
+          "oklch(38% 0.21521 262.88)",
+          "oklch(49% 0.21521 262.88)",
+          "oklch(61% 0.21521 262.88)",
+          "oklch(72% 0.21521 262.88)",
+          "oklch(84% 0.21521 262.88)",
+          "oklch(95% 0.21521 262.88)"
+        ]
+      },
+      "tab-active": {
+        "role": "neutral",
+        "displayName": "Tab Active",
+        "canonical": "#dce6f5",
+        "tonalRamp": [
+          "oklch(15% 0.02308 258.36)",
+          "oklch(26% 0.02308 258.36)",
+          "oklch(38% 0.02308 258.36)",
+          "oklch(49% 0.02308 258.36)",
+          "oklch(61% 0.02308 258.36)",
+          "oklch(72% 0.02308 258.36)",
+          "oklch(84% 0.02308 258.36)",
+          "oklch(95% 0.02308 258.36)"
+        ]
+      },
+      "placeholder": {
+        "role": "neutral",
+        "displayName": "Placeholder",
+        "canonical": "#657184",
+        "tonalRamp": [
+          "oklch(15% 0.03309 259.56)",
+          "oklch(26% 0.03309 259.56)",
+          "oklch(38% 0.03309 259.56)",
+          "oklch(49% 0.03309 259.56)",
+          "oklch(61% 0.03309 259.56)",
+          "oklch(72% 0.03309 259.56)",
+          "oklch(84% 0.03309 259.56)",
+          "oklch(95% 0.03309 259.56)"
+        ]
+      },
+      "overlay": {
+        "role": "neutral",
+        "displayName": "Overlay",
+        "canonical": "oklch(0% 0 0 / 0.8)",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(26% 0.00000 0.00)",
+          "oklch(38% 0.00000 0.00)",
+          "oklch(49% 0.00000 0.00)",
+          "oklch(61% 0.00000 0.00)",
+          "oklch(72% 0.00000 0.00)",
+          "oklch(84% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "main-dark": {
+        "role": "primary",
+        "displayName": "Main Dark",
+        "canonical": "#84aaff",
+        "tonalRamp": [
+          "oklch(15% 0.13038 265.08)",
+          "oklch(26% 0.13038 265.08)",
+          "oklch(38% 0.13038 265.08)",
+          "oklch(49% 0.13038 265.08)",
+          "oklch(61% 0.13038 265.08)",
+          "oklch(72% 0.13038 265.08)",
+          "oklch(84% 0.13038 265.08)",
+          "oklch(95% 0.13038 265.08)"
+        ]
+      },
+      "main-foreground-dark": {
+        "role": "neutral",
+        "displayName": "Main Foreground Dark",
+        "canonical": "#10151e",
+        "tonalRamp": [
+          "oklch(15% 0.01987 262.01)",
+          "oklch(26% 0.01987 262.01)",
+          "oklch(38% 0.01987 262.01)",
+          "oklch(49% 0.01987 262.01)",
+          "oklch(61% 0.01987 262.01)",
+          "oklch(72% 0.01987 262.01)",
+          "oklch(84% 0.01987 262.01)",
+          "oklch(95% 0.01987 262.01)"
+        ]
+      },
+      "background-dark": {
+        "role": "neutral",
+        "displayName": "Background Dark",
+        "canonical": "#10151e",
+        "tonalRamp": [
+          "oklch(15% 0.01987 262.01)",
+          "oklch(26% 0.01987 262.01)",
+          "oklch(38% 0.01987 262.01)",
+          "oklch(49% 0.01987 262.01)",
+          "oklch(61% 0.01987 262.01)",
+          "oklch(72% 0.01987 262.01)",
+          "oklch(84% 0.01987 262.01)",
+          "oklch(95% 0.01987 262.01)"
+        ]
+      },
+      "secondary-background-dark": {
+        "role": "neutral",
+        "displayName": "Secondary Background Dark",
+        "canonical": "#181f2a",
+        "tonalRamp": [
+          "oklch(15% 0.02364 259.31)",
+          "oklch(26% 0.02364 259.31)",
+          "oklch(38% 0.02364 259.31)",
+          "oklch(49% 0.02364 259.31)",
+          "oklch(61% 0.02364 259.31)",
+          "oklch(72% 0.02364 259.31)",
+          "oklch(84% 0.02364 259.31)",
+          "oklch(95% 0.02364 259.31)"
+        ]
+      },
+      "foreground-dark": {
+        "role": "neutral",
+        "displayName": "Foreground Dark",
+        "canonical": "#f3f6fc",
+        "tonalRamp": [
+          "oklch(15% 0.00862 264.52)",
+          "oklch(26% 0.00862 264.52)",
+          "oklch(38% 0.00862 264.52)",
+          "oklch(49% 0.00862 264.52)",
+          "oklch(61% 0.00862 264.52)",
+          "oklch(72% 0.00862 264.52)",
+          "oklch(84% 0.00862 264.52)",
+          "oklch(95% 0.00862 264.52)"
+        ]
+      },
+      "border-dark": {
+        "role": "neutral",
+        "displayName": "Border Dark",
+        "canonical": "#2c3543",
+        "tonalRamp": [
+          "oklch(15% 0.02784 259.13)",
+          "oklch(26% 0.02784 259.13)",
+          "oklch(38% 0.02784 259.13)",
+          "oklch(49% 0.02784 259.13)",
+          "oklch(61% 0.02784 259.13)",
+          "oklch(72% 0.02784 259.13)",
+          "oklch(84% 0.02784 259.13)",
+          "oklch(95% 0.02784 259.13)"
+        ]
+      },
+      "ring-dark": {
+        "role": "primary",
+        "displayName": "Ring Dark",
+        "canonical": "#5294ff",
+        "tonalRamp": [
+          "oklch(15% 0.17250 259.61)",
+          "oklch(26% 0.17250 259.61)",
+          "oklch(38% 0.17250 259.61)",
+          "oklch(49% 0.17250 259.61)",
+          "oklch(61% 0.17250 259.61)",
+          "oklch(72% 0.17250 259.61)",
+          "oklch(84% 0.17250 259.61)",
+          "oklch(95% 0.17250 259.61)"
+        ]
+      },
+      "tab-active-dark": {
+        "role": "neutral",
+        "displayName": "Tab Active Dark",
+        "canonical": "#0b111a",
+        "tonalRamp": [
+          "oklch(15% 0.02101 258.31)",
+          "oklch(26% 0.02101 258.31)",
+          "oklch(38% 0.02101 258.31)",
+          "oklch(49% 0.02101 258.31)",
+          "oklch(61% 0.02101 258.31)",
+          "oklch(72% 0.02101 258.31)",
+          "oklch(84% 0.02101 258.31)",
+          "oklch(95% 0.02101 258.31)"
+        ]
+      },
+      "placeholder-dark": {
+        "role": "neutral",
+        "displayName": "Placeholder Dark",
+        "canonical": "#a0adbf",
+        "tonalRamp": [
+          "oklch(15% 0.02982 256.51)",
+          "oklch(26% 0.02982 256.51)",
+          "oklch(38% 0.02982 256.51)",
+          "oklch(49% 0.02982 256.51)",
+          "oklch(61% 0.02982 256.51)",
+          "oklch(72% 0.02982 256.51)",
+          "oklch(84% 0.02982 256.51)",
+          "oklch(95% 0.02982 256.51)"
+        ]
+      },
+      "overlay-dark": {
+        "role": "neutral",
+        "displayName": "Overlay Dark",
+        "canonical": "#000000cc",
+        "tonalRamp": [
+          "oklch(15% 0.00000 0.00)",
+          "oklch(26% 0.00000 0.00)",
+          "oklch(38% 0.00000 0.00)",
+          "oklch(49% 0.00000 0.00)",
+          "oklch(61% 0.00000 0.00)",
+          "oklch(72% 0.00000 0.00)",
+          "oklch(84% 0.00000 0.00)",
+          "oklch(95% 0.00000 0.00)"
+        ]
+      },
+      "destructive": {
+        "role": "semantic",
+        "displayName": "Destructive",
+        "canonical": "oklch(57.7% 0.245 27.325)",
+        "tonalRamp": [
+          "oklch(15% 0.245 27.325)",
+          "oklch(26% 0.245 27.325)",
+          "oklch(38% 0.245 27.325)",
+          "oklch(49% 0.245 27.325)",
+          "oklch(61% 0.245 27.325)",
+          "oklch(72% 0.245 27.325)",
+          "oklch(84% 0.245 27.325)",
+          "oklch(95% 0.245 27.325)"
+        ]
+      },
+      "destructive-hover": {
+        "role": "semantic",
+        "displayName": "Destructive Hover",
+        "canonical": "oklch(50.5% 0.213 27.518)",
+        "tonalRamp": [
+          "oklch(15% 0.213 27.518)",
+          "oklch(26% 0.213 27.518)",
+          "oklch(38% 0.213 27.518)",
+          "oklch(49% 0.213 27.518)",
+          "oklch(61% 0.213 27.518)",
+          "oklch(72% 0.213 27.518)",
+          "oklch(84% 0.213 27.518)",
+          "oklch(95% 0.213 27.518)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Large public headlines; responsive sizes are described in DESIGN.md."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Recurring descriptions and supporting prose."
+      }
+    },
+    "shadows": [
+      {
+        "name": "surface",
+        "value": "0 2px 6px -2px rgb(24 34 48 / .08), 0 12px 28px -18px rgb(24 34 48 / .12)",
+        "purpose": "Shared ambient depth for cards and primary buttons."
+      },
+      {
+        "name": "field-inset",
+        "value": "inset 0 1px 2px rgb(0 0 0 / .025)",
+        "purpose": "Quiet field interior."
+      },
+      {
+        "name": "mobile-dock",
+        "value": "0 -4px 24px rgb(0 0 0 / .04)",
+        "purpose": "Separation above the fixed mobile navigation."
+      }
+    ],
+    "motion": [
+      {
+        "name": "control-transition",
+        "value": "150ms",
+        "purpose": "Button colors, borders, shadows, and field focus."
+      },
+      {
+        "name": "navigation-position",
+        "value": "220ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Translate the measured active navigation surface; dimensions update immediately."
+      },
+      {
+        "name": "tab-position",
+        "value": "180ms ease-out",
+        "purpose": "Translate the selected tab surface."
+      },
+      {
+        "name": "tab-panel",
+        "value": "160ms ease-out",
+        "purpose": "Fade tab content from .75 to 1 opacity."
+      },
+      {
+        "name": "route-entry",
+        "value": "150ms",
+        "purpose": "Fade and 4px vertical entrance; disabled for reduced motion."
+      },
+      {
+        "name": "accordion-height",
+        "value": "180ms ease-out",
+        "purpose": "Open and close FAQ content."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "sm",
+        "value": "640px"
+      },
+      {
+        "name": "md",
+        "value": "768px"
+      },
+      {
+        "name": "lg",
+        "value": "1024px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary actions use blue and ambient depth.",
+      "html": "<button class=\"ds-primary\">Save changes</button>",
+      "css": ".ds-primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:400 14px/20px var(--font-sans,Geist,sans-serif);border-radius:var(--radius-base,12px);height:40px;padding:8px 16px;cursor:pointer;transition:background-color 150ms,border-color 150ms,box-shadow 150ms,color 150ms;background:var(--main);color:var(--main-foreground);border:1px solid transparent;box-shadow:var(--shadow);}.ds-primary:hover{background:color-mix(in srgb,var(--main) 90%,transparent);}.ds-primary:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}.ds-primary:active:not(:disabled){transform:translateY(1px);}.ds-primary:disabled{opacity:.5;pointer-events:none;}"
+    },
+    {
+      "name": "Neutral Button",
+      "kind": "button",
+      "refersTo": "button-neutral",
+      "description": "Optional actions use a thin edge and neutral surface.",
+      "html": "<button class=\"ds-neutral\">View details</button>",
+      "css": ".ds-neutral{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:400 14px/20px var(--font-sans,Geist,sans-serif);border-radius:var(--radius-base,12px);height:40px;padding:8px 16px;cursor:pointer;transition:background-color 150ms,border-color 150ms,box-shadow 150ms,color 150ms;background:var(--secondary-background);color:var(--foreground);border:1px solid var(--border);}.ds-neutral:hover{background:var(--background);}.ds-neutral:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}.ds-neutral:active:not(:disabled){transform:translateY(1px);}.ds-neutral:disabled{opacity:.5;pointer-events:none;}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Compact full-width field with visible focus.",
+      "html": "<input class=\"ds-input\" aria-label=\"Role title\" placeholder=\"Role title\">",
+      "css": ".ds-input{width:100%;height:40px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-base,12px);background:var(--secondary-background);color:var(--foreground);font:400 14px/20px var(--font-sans,Geist,sans-serif);box-shadow:inset 0 1px 2px rgb(0 0 0 / .025);transition:border-color 150ms,box-shadow 150ms;}.ds-input::placeholder{color:var(--placeholder);}.ds-input:hover{border-color:color-mix(in srgb,var(--foreground) 25%,var(--border));}.ds-input:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}.ds-input:disabled{opacity:.5;cursor:not-allowed;}"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Default workspace container with aligned content.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-title\">Your next step</h3><p class=\"ds-description\">Keep a promising application moving.</p></article>",
+      "css": ".ds-card{display:flex;flex-direction:column;gap:24px;padding:24px;border:1px solid var(--border);border-radius:var(--radius-base,12px);background:var(--secondary-background);color:var(--foreground);box-shadow:var(--shadow);font-family:var(--font-sans,Geist,sans-serif);}.ds-title{margin:0;font-size:18px;font-weight:600;line-height:1.2;}.ds-description{margin:0;font-size:14px;font-weight:400;line-height:1.65;opacity:.75;}"
+    },
+    {
+      "name": "Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Small neutral metadata label.",
+      "html": "<span class=\"ds-badge\">Interview</span>",
+      "css": ".ds-badge{display:inline-flex;align-items:center;justify-content:center;white-space:nowrap;padding:2px 10px;border:1px solid var(--border);border-radius:6px;background:var(--background);color:var(--foreground);font:400 12px/16px var(--font-sans,Geist,sans-serif);}"
+    },
+    {
+      "name": "Selected Navigation",
+      "kind": "nav",
+      "refersTo": "button-neutral",
+      "description": "Compact desktop destinations with restrained active emphasis.",
+      "html": "<nav aria-label=\"Main navigation\" class=\"ds-nav\"><a class=\"ds-destination\" href=\"#home\" aria-current=\"page\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z\"/></svg>Home</a><a class=\"ds-destination\" href=\"#jobs\">Jobs</a></nav>",
+      "css": ".ds-nav{display:flex;flex-direction:column;gap:8px;font-family:var(--font-sans,Geist,sans-serif);}.ds-destination{display:flex;align-items:center;gap:12px;min-height:48px;padding:0 12px;border-radius:var(--radius-base,12px);font-size:14px;font-weight:600;color:var(--foreground);text-decoration:none;}.ds-destination[aria-current=page]{background:color-mix(in srgb,var(--main) 10%,transparent);color:var(--main);}.ds-destination:hover{background:var(--background);}.ds-destination:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tabs-active",
+      "description": "Contained list with a filled selected surface.",
+      "html": "<div class=\"ds-tabs\" role=\"tablist\" aria-label=\"Settings\"><button class=\"ds-tab\" role=\"tab\" aria-selected=\"true\">Account</button><button class=\"ds-tab\" role=\"tab\" aria-selected=\"false\">Plan</button></div>",
+      "css": ".ds-tabs{display:flex;width:fit-content;max-width:100%;gap:4px;padding:4px;overflow-x:auto;border-radius:var(--radius-base,12px);background:color-mix(in srgb,var(--foreground) 5%,transparent);}.ds-tab{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;border:0;border-radius:8px;white-space:nowrap;background:transparent;color:color-mix(in srgb,var(--foreground) 65%,transparent);font:500 14px/20px var(--font-sans,Geist,sans-serif);cursor:pointer;transition:color 150ms;}.ds-tab[aria-selected=true]{background:var(--tab-active);color:var(--foreground);box-shadow:0 1px 3px 0 rgb(0 0 0 / .1),0 1px 2px -1px rgb(0 0 0 / .1);}.ds-tab:hover{color:var(--foreground);}.ds-tab:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}"
+    },
+    {
+      "name": "Primary Without Shadow",
+      "kind": "button",
+      "refersTo": "button-no-shadow",
+      "description": "Existing primary variant without ambient depth.",
+      "html": "<button class=\"ds-no-shadow\">Continue</button>",
+      "css": ".ds-no-shadow{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:400 14px/20px var(--font-sans,Geist,sans-serif);border-radius:var(--radius-base,12px);height:40px;padding:8px 16px;cursor:pointer;transition:background-color 150ms,border-color 150ms,box-shadow 150ms,color 150ms;background:var(--main);color:var(--main-foreground);border:1px solid transparent;}.ds-no-shadow:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}.ds-no-shadow:active:not(:disabled){transform:translateY(1px);}.ds-no-shadow:disabled{opacity:.5;pointer-events:none;}"
+    },
+    {
+      "name": "Primary Reverse Variant",
+      "kind": "button",
+      "refersTo": "button-reverse",
+      "description": "Existing primary variant without ambient depth.",
+      "html": "<button class=\"ds-reverse\">Continue</button>",
+      "css": ".ds-reverse{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:400 14px/20px var(--font-sans,Geist,sans-serif);border-radius:var(--radius-base,12px);height:40px;padding:8px 16px;cursor:pointer;transition:background-color 150ms,border-color 150ms,box-shadow 150ms,color 150ms;background:var(--main);color:var(--main-foreground);border:1px solid transparent;}.ds-reverse:hover{background:color-mix(in srgb,var(--main) 90%,transparent);}.ds-reverse:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}.ds-reverse:active:not(:disabled){transform:translateY(1px);}.ds-reverse:disabled{opacity:.5;pointer-events:none;}"
+    },
+    {
+      "name": "Destructive Button",
+      "kind": "button",
+      "refersTo": "button-destructive",
+      "description": "Explicit destructive actions use the existing red semantic variant.",
+      "html": "<button class=\"ds-destructive\">Delete record</button>",
+      "css": ".ds-destructive{display:inline-flex;align-items:center;justify-content:center;gap:8px;font:400 14px/20px var(--font-sans,Geist,sans-serif);border-radius:var(--radius-base,12px);height:40px;padding:8px 16px;cursor:pointer;transition:background-color 150ms,border-color 150ms,box-shadow 150ms,color 150ms;background:oklch(57.7% .245 27.325);color:#fff;border:1px solid transparent;}.ds-destructive:hover{background:oklch(50.5% .213 27.518);}.ds-destructive:focus-visible{outline:2px solid var(--ring);outline-offset:2px;}.ds-destructive:active:not(:disabled){transform:translateY(1px);}.ds-destructive:disabled{opacity:.5;pointer-events:none;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The clear workspace",
+    "overview": "JobSync is a calm, minimal workspace: soft neutral grounds, gently rounded surfaces, a single restrained blue accent, and readable Geist typography. The public surfaces carry more space and a larger type scale; the application keeps the same materials at a practical working density.\n\nHierarchy comes from type, spacing, and restrained tonal contrast. Light and dark themes preserve semantic roles while changing their colors. The J-hook and outward-arrow mark provides the recurring identity; the product itself supplies the visual story.",
+    "keyCharacteristics": [
+      "One blue accent for primary actions and selected states.",
+      "Soft neutral grounds with thin surface borders.",
+      "Shared UI primitives, compact working controls, and spacious public sections.",
+      "Brief state motion with reduced-motion support."
+    ],
+    "rules": [
+      {
+        "name": "Action Accent",
+        "body": "Reserve the blue accent for primary actions, selection, focus, and useful status or icon emphasis; optional actions use neutral surfaces.",
+        "section": "colors"
+      },
+      {
+        "name": "Contained Navigation",
+        "body": "Keep tab overflow within the tab list and reserve content clearance for the mobile dock.",
+        "section": "layout"
+      },
+      {
+        "name": "Shared Surface",
+        "body": "Use the shared UI primitives and semantic theme variables for recurring controls and containers.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use components from components/ui and preserve their focus and keyboard behavior.",
+      "Do keep light and dark semantic roles together when introducing a recurring surface.",
+      "Do use the shared spacing rhythm and allow long content to wrap.",
+      "Do retain reduced-motion behavior and mobile safe-area clearance."
+    ],
+    "donts": [
+      "Don't introduce an additional decorative accent palette into the main product surfaces.",
+      "Don't replace ambient depth with hard offset shadows.",
+      "Don't use decorative uppercase kickers, glyph icons, or system display faces as new house styles.",
+      "Don't animate indicator dimensions; measure dimensions immediately and animate position with transforms."
+    ]
+  }
+}

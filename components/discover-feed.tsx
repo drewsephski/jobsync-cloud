@@ -1,5 +1,5 @@
 "use client"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Building2,
@@ -11,7 +11,7 @@ import {
   X,
   SlidersHorizontal,
   Plus,
-} from "lucide-react"
+} from "@/components/ui/animated-icons"
 import type { DiscoveryData } from "@/lib/domain/discovery/service"
 import { Button } from "@/components/ui/button"
 import {
@@ -83,6 +83,32 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
   const [error, setError] = useState("")
   const [busy, setBusy] = useState(false)
   const [preferences, setPreferences] = useState(false)
+  const companySearch = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (!data.watches.length) return
+    const controller = new AbortController()
+    const timer = setInterval(() => {
+      if (document.visibilityState !== "visible" || busy) return
+      request(
+        query,
+        filter,
+        AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)])
+      )
+        .then((next) => {
+          if (!controller.signal.aborted) setData(next)
+        })
+        .catch(() => {
+          if (!controller.signal.aborted)
+            setError(
+              "Results could not refresh. Check your connection or press Refresh."
+            )
+        })
+    }, 15_000)
+    return () => {
+      clearInterval(timer)
+      controller.abort()
+    }
+  }, [data.watches.length, query, filter, busy])
   useEffect(() => {
     const controller = new AbortController()
     const timer = setTimeout(() => {
@@ -140,7 +166,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               : result.error === "email_verification_required"
                 ? "Verify your email in Account & billing to start your trial."
                 : result.error === "watch_limit"
-                  ? "You can monitor up to 30 company boards. Remove one to add another."
+                  ? `Your plan allows ${data.watchLimit} companies. Remove one to add another.`
                   : "Could not save your change. Please try again."
         )
       }
@@ -154,12 +180,9 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
     }
   }
   return (
-    <FieldGroup className="onboarding-surface discovery-surface mx-auto max-w-6xl gap-7 px-4 py-10 sm:px-8">
+    <FieldGroup className="onboarding-surface discovery-surface mx-auto max-w-6xl gap-7">
       <FieldGroup className="flex-row flex-wrap items-start justify-between gap-4">
         <FieldGroup className="min-w-0 flex-1 basis-full gap-2 sm:basis-0">
-          <CardDescription className="text-xs tracking-widest uppercase">
-            Your next opportunity
-          </CardDescription>
           <CardTitle
             role="heading"
             aria-level={1}
@@ -168,16 +191,22 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
             Discover
           </CardTitle>
           <CardDescription>
-            Choose companies you’re interested in. JobSync keeps watching their
-            public openings.
+            Find roles that connect to your experience. Keep the ones worth
+            pursuing.
           </CardDescription>
         </FieldGroup>
         <Button
-          variant="neutral"
-          nativeButton={false}
-          render={<Link href="/dashboard/jobs" />}
+          disabled={busy || !data.ready}
+          onClick={() => {
+            companySearch.current?.focus()
+            companySearch.current?.scrollIntoView({
+              behavior: "instant",
+              block: "center",
+            })
+          }}
         >
-          Your applications
+          <Search />{" "}
+          {data.watches.length ? "Add companies" : "Find jobs for me"}
         </Button>
       </FieldGroup>
       {error && (
@@ -188,9 +217,16 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
       {!data.ready && (
         <Alert>
           <AlertDescription>
-            Confirm your resume and save target roles to start discovering
-            relevant jobs.
+            Confirm your resume and choose a starting role to find relevant
+            jobs.
           </AlertDescription>
+          <Button
+            className="mt-3"
+            nativeButton={false}
+            render={<Link href="/onboarding" />}
+          >
+            Review resume & starting role
+          </Button>
         </Alert>
       )}
       <FieldGroup className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -261,9 +297,9 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                 </EmptyTitle>
                 <EmptyDescription>
                   {data.watches.length === 0
-                    ? "Search the company directory and choose Watch. Your first openings will appear after the next background check."
+                    ? "Choose a company from the list. We’ll look for roles using your confirmed experience and starting role."
                     : filter === "new"
-                      ? "We check watched boards in the background every few minutes. If no relevant openings appear, try broader target titles or locations. Public boards are refreshed every six hours."
+                      ? "We’re watching your companies for relevant openings. Results update here automatically. Broaden your role or location if your search stays quiet."
                       : "Use the actions on a job to organize your results."}
                 </EmptyDescription>
               </EmptyHeader>
@@ -395,18 +431,23 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
             ))
           )}
         </FieldGroup>
-        <Card className="lg:sticky lg:top-6">
+        <Card
+          className={`lg:sticky lg:top-6 ${!data.watches.length ? "order-first lg:order-last" : ""}`}
+        >
           <CardHeader>
             <CardTitle
               role="heading"
               aria-level={2}
               className="flex items-center gap-2 text-lg"
             >
-              <Building2 className="size-5" /> Companies
+              <Building2 className="size-5" />{" "}
+              {data.watches.length
+                ? "Your companies"
+                : "Where would you like to work?"}
             </CardTitle>
             <CardDescription>
               {data.watchLimit > 0
-                ? `Watch up to ${data.watchLimit} public company boards.`
+                ? `Choose up to ${data.watchLimit} companies. We’ll keep an eye on their openings.`
                 : "Upgrade to watch public company boards."}
             </CardDescription>
           </CardHeader>
@@ -453,6 +494,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               <FieldLabel htmlFor="company-search">Find a company</FieldLabel>
               <Input
                 id="company-search"
+                ref={companySearch}
                 placeholder="Search companies…"
                 value={query}
                 maxLength={120}
@@ -463,7 +505,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               className="max-h-[440px] gap-2 overflow-y-auto"
               aria-label="Company directory"
             >
-              {data.companies.map((company) => (
+              {data.companies.slice(0, query.trim() ? 30 : 0).map((company) => (
                 <Item key={company.id} size="sm" className="border-border">
                   <ItemContent className="min-w-0">
                     <ItemTitle className="line-clamp-none break-words">
@@ -490,15 +532,16 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                   </Button>
                 </Item>
               ))}
-              {!data.companies.length && (
+              {query.trim() && !data.companies.length && (
                 <CardDescription>
                   No supported companies found. Try another company name.
                 </CardDescription>
               )}
             </ItemGroup>
-            <CardDescription className="text-xs text-foreground">
-              Directory entries may move or retire. A board outage preserves
-              your existing results.
+            <CardDescription className="text-xs">
+              {query.trim()
+                ? "Supported company career boards on Greenhouse, Lever, and Ashby."
+                : "Search for a company you’d like to work at. Choose Watch to find relevant openings and keep checking for new ones."}
             </CardDescription>
           </CardContent>
         </Card>
@@ -508,7 +551,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
           <DialogHeader>
             <DialogTitle>Refine your search</DialogTitle>
             <DialogDescription>
-              Your next background check will use these preferences.
+              Choose what you want next. These preferences guide new results.
             </DialogDescription>
           </DialogHeader>
           <DiscoveryPreferences

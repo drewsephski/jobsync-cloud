@@ -1,7 +1,12 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { Check, FileText, ShieldCheck, ArrowRight } from "lucide-react"
+import {
+  Check,
+  FileText,
+  ShieldCheck,
+  ArrowRight,
+} from "@/components/ui/animated-icons"
 import type { OnboardingState } from "@/lib/domain/onboarding/service"
 import { ResumeUpload } from "./resume-upload"
 import { ResumeEditor } from "./resume-editor"
@@ -38,56 +43,40 @@ export function OnboardingFlow({
     heading.current?.focus()
   }, [active])
   return (
-    <FieldGroup className="onboarding-surface gap-8 py-4 sm:py-8">
-      <FieldGroup className="flex-row items-center justify-between gap-3">
-        <CardTitle className="text-lg tracking-tight">
-          JobSync
-          <Badge variant="neutral" className="ml-2 font-mono text-[10px]">
-            CLOUD
-          </Badge>
-        </CardTitle>
-        <CardDescription className="flex items-center gap-2 text-xs">
-          <ShieldCheck className="size-4" /> Private to your account
-        </CardDescription>
-      </FieldGroup>
+    <FieldGroup className="onboarding-surface mx-auto max-w-3xl gap-8 py-4 sm:py-8">
       {!resumeOnly && (
         <FieldGroup className="gap-3">
           <FieldGroup
             role="list"
             aria-label="Onboarding progress"
-            className="grid grid-cols-3 gap-3"
+            className="grid grid-cols-2 gap-3"
           >
-            {["Upload resume", "Review & confirm", "Target roles"].map(
-              (label, index) => (
-                <FieldGroup
-                  key={label}
-                  role="listitem"
-                  aria-current={active === index ? "step" : undefined}
-                  className={`flex-row items-center gap-2 text-xs sm:text-sm ${index <= active ? "text-foreground" : "text-foreground/60"}`}
+            {["Upload resume", "Review & confirm"].map((label, index) => (
+              <FieldGroup
+                key={label}
+                role="listitem"
+                aria-current={
+                  Math.min(active, 1) === index ? "step" : undefined
+                }
+                className={`flex-row items-center gap-2 text-xs sm:text-sm ${index <= active ? "text-foreground" : "text-foreground/60"}`}
+              >
+                <Badge
+                  variant="neutral"
+                  className={`step-number ${index <= active ? "step-active" : ""}`}
                 >
-                  <Badge
-                    variant="neutral"
-                    className={`step-number ${index <= active ? "step-active" : ""}`}
-                  >
-                    {index < active ? <Check className="size-3" /> : index + 1}
-                  </Badge>
-                  {label}
-                </FieldGroup>
-              )
-            )}
+                  {index < active ? <Check className="size-3" /> : index + 1}
+                </Badge>
+                {label}
+              </FieldGroup>
+            ))}
           </FieldGroup>
           <Progress
-            value={active === 0 ? 12 : active === 1 ? 50 : 85}
+            value={active === 0 ? 15 : active === 1 ? 60 : 100}
             aria-label="Onboarding progress"
           />
         </FieldGroup>
       )}
       <FieldGroup className="gap-3">
-        <CardDescription className="text-xs font-semibold tracking-[0.16em] text-foreground uppercase">
-          {resumeOnly
-            ? "Your resume"
-            : `Account setup · Step ${active + 1} of 3`}
-        </CardDescription>
         <CardTitle
           ref={heading}
           tabIndex={-1}
@@ -96,27 +85,31 @@ export function OnboardingFlow({
           className="text-3xl leading-tight font-semibold tracking-tight outline-none sm:text-4xl"
         >
           {preferenceStep
-            ? "What’s your next role?"
+            ? "Your resume is ready. Let’s find a role."
             : reviewing
-              ? "Your experience, in your words."
+              ? resumeOnly && state.version?.confirmed
+                ? "Your resume."
+                : "Does this look like you?"
               : state.upload
                 ? "Your resume is taking shape."
-                : "Start with your experience."}
+                : "Upload your resume."}
         </CardTitle>
         <CardDescription className="max-w-2xl text-base leading-relaxed text-foreground">
           {preferenceStep
-            ? "A few preferences will give your job search a clear starting point."
+            ? "One starting role is enough. Everything else can wait."
             : reviewing
-              ? "Review the extracted draft, make it accurate, then explicitly confirm the version you want to use."
+              ? resumeOnly && state.version?.confirmed
+                ? "Your confirmed experience guides matching. Edits stay drafts until you confirm them."
+                : "Check your name, skills, and experience. Correct anything missing, then confirm when it’s accurate."
               : "Upload your resume once. We’ll turn it into an editable draft, and you’ll have the final say on every detail."}
         </CardDescription>
       </FieldGroup>
       <StepTransition step={active}>
-        <Card className="workspace-card">
+        <Card className="workspace-card border-0 shadow-none">
           <CardHeader>
             <CardTitle role="heading" aria-level={2}>
               {preferenceStep
-                ? "Search preferences"
+                ? "Where would you like to start?"
                 : reviewing
                   ? "Review your resume"
                   : "Resume document"}
@@ -177,8 +170,9 @@ export function OnboardingFlow({
         </Card>
       </StepTransition>
       <CardDescription className="text-center text-xs leading-relaxed text-foreground">
-        Your original file and AI draft stay intact. Only a version you
-        explicitly confirm is accepted as your resume.
+        <ShieldCheck className="mx-auto mb-2 size-4" aria-hidden="true" /> Your
+        original file and AI draft stay intact. Only a version you explicitly
+        confirm is accepted as your resume.
       </CardDescription>
       {resumeOnly && (
         <Button

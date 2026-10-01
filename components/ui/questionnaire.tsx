@@ -1,7 +1,7 @@
 "use client"
 
 import { Questionnaire as QuestionnairePrimitive } from "@shadcn/react/questionnaire"
-import { CheckIcon } from "lucide-react"
+import { CheckIcon } from "@/components/ui/animated-icons"
 
 import * as React from "react"
 
@@ -108,7 +108,7 @@ function QuestionnaireChoice({
     <QuestionnairePrimitive.Choice
       data-slot="questionnaire-choice"
       className={cn(
-        "group/questionnaire-choice relative flex min-h-11 cursor-pointer items-start gap-3 rounded-base border-2 border-border bg-secondary-background px-4 py-3 text-start text-sm font-base text-foreground transition-colors outline-none select-none has-[>input:focus-visible]:ring-2 has-[>input:focus-visible]:ring-black has-[>input:focus-visible]:ring-offset-2 data-checked:bg-background",
+        "group/questionnaire-choice relative flex min-h-11 cursor-pointer items-start gap-3 rounded-base border border-border bg-secondary-background px-4 py-3 text-start text-sm font-base text-foreground transition-colors outline-none select-none has-[>input:focus-visible]:ring-2 has-[>input:focus-visible]:ring-ring has-[>input:focus-visible]:ring-offset-2 data-checked:bg-background",
         "data-disabled:pointer-events-none data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className,
       )}
@@ -121,7 +121,7 @@ function QuestionnaireChoice({
       <span
         aria-hidden="true"
         data-slot="questionnaire-choice-indicator"
-        className="pointer-events-none relative flex size-4 shrink-0 translate-y-[--spacing(0.45)] items-center justify-center rounded-base border-2 border-border bg-secondary-background text-main-foreground group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 group-data-[type=radio]/questionnaire-choice:rounded-full group-data-checked/questionnaire-choice:bg-main group-data-checked/questionnaire-choice:group-data-[type=radio]/questionnaire-choice:bg-transparent"
+        className="pointer-events-none relative flex size-4 shrink-0 translate-y-[--spacing(0.45)] items-center justify-center rounded-base border border-border bg-secondary-background text-main-foreground group-has-data-[slot=questionnaire-choice-description]/questionnaire-choice:translate-y-0.5 group-data-[type=radio]/questionnaire-choice:rounded-full group-data-checked/questionnaire-choice:bg-main group-data-checked/questionnaire-choice:group-data-[type=radio]/questionnaire-choice:bg-transparent"
       >
         <span
           data-slot="questionnaire-choice-indicator-dot"
@@ -140,7 +140,7 @@ function QuestionnaireChoice({
       </QuestionnairePrimitive.ChoiceLabel>
       <QuestionnairePrimitive.ChoiceShortcut
         data-slot="questionnaire-choice-shortcut"
-        className="pointer-events-none ms-auto hidden size-5 shrink-0 items-center justify-center rounded-full border-2 border-border bg-secondary-background text-xs leading-none font-base text-foreground group-data-checked/questionnaire-choice:bg-background group-data-[shortcut]/questionnaire-choice:inline-flex"
+        className="pointer-events-none ms-auto hidden size-5 shrink-0 items-center justify-center rounded-full border border-border bg-secondary-background text-xs leading-none font-base text-foreground group-data-checked/questionnaire-choice:bg-background group-data-[shortcut]/questionnaire-choice:inline-flex"
       />
     </QuestionnairePrimitive.Choice>
   )
@@ -171,7 +171,7 @@ function QuestionnaireInput({
       <QuestionnairePrimitive.Input
         data-slot="questionnaire-input"
         className={cn(
-          "flex h-10 min-h-10 w-full min-w-0 rounded-base border-2 border-border bg-secondary-background px-3 py-2 text-base font-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 md:text-sm",
+          "flex h-10 min-h-10 w-full min-w-0 rounded-base border border-border bg-secondary-background px-3 py-2 text-base font-base text-foreground focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-0 md:text-sm",
           "selection:bg-main selection:text-main-foreground placeholder:text-foreground/50",
           className,
         )}

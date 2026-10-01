@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { FieldGroup } from "@/components/ui/field"
 import { CardDescription } from "@/components/ui/card"
-import { LinkButton } from "@/components/ui/link-button"
+import { Logo } from "@/components/ui/logo"
 import { ThemeToggle } from "@/components/ui/theme-toggle"
 export default function AuthLayout({
   children,
@@ -12,9 +12,7 @@ export default function AuthLayout({
     <main className="mx-auto flex min-h-svh max-w-md flex-col justify-center px-5 py-10">
       <FieldGroup className="gap-7">
         <FieldGroup className="flex-row items-center justify-between gap-4">
-          <LinkButton href="/" variant="neutral" size="sm">
-            JobSync Cloud
-          </LinkButton>
+          <Logo />
           <ThemeToggle />
         </FieldGroup>
         {children}

@@ -2,7 +2,7 @@
 
 import { Radio as RadioPrimitive } from "@base-ui/react/radio"
 import { RadioGroup as RadioGroupPrimitive } from "@base-ui/react/radio-group"
-import { Circle } from "lucide-react"
+import { Circle } from "@/components/ui/animated-icons"
 
 import * as React from "react"
 
@@ -29,7 +29,7 @@ function RadioGroupItem({
     <RadioPrimitive.Root
       data-slot="radio-group-item"
       className={cn(
-        "inline-flex aspect-square size-4 items-center justify-center rounded-full border-2 border-border text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none aria-invalid:border-red-500 aria-invalid:text-red-500 data-disabled:cursor-not-allowed data-disabled:opacity-50",
+        "inline-flex aspect-square size-4 items-center justify-center rounded-full border border-border text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none aria-invalid:border-red-500 aria-invalid:text-red-500 data-disabled:cursor-not-allowed data-disabled:opacity-50",
         className
       )}
       {...props}

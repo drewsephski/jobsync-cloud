@@ -8,7 +8,7 @@ import {
   Pencil,
   ArrowRight,
   Clock,
-} from "lucide-react"
+} from "@/components/ui/animated-icons"
 import type {
   ApplicationView,
   ApplicationsData,

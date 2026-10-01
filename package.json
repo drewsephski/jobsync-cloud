@@ -21,7 +21,7 @@
     "auth:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/auth-boundary.test.ts",
     "storage:configure": "node --conditions=react-server --import tsx scripts/configure-storage.ts",
     "storage:smoke": "node --conditions=react-server --import tsx scripts/storage-smoke.ts",
-    "storage:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/storage.test.ts tests/storage-api.test.ts tests/storage-database.test.ts tests/storage-presigner.test.ts",
+    "storage:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/storage.test.ts tests/storage-api.test.ts tests/storage-database.test.ts tests/storage-presigner.test.ts tests/upload-client.test.ts",
     "validation:test": "node --import tsx --test tests/validation.test.ts",
     "worker:test": "node --import tsx --test --test-concurrency=1 tests/processing-run.test.ts tests/trigger-handler.test.ts tests/resume-worker.test.ts tests/download-object.test.ts tests/runtime-boundary.test.ts",
     "ai:test": "node --import tsx --test --test-concurrency=1 tests/extraction.test.ts tests/ai-boundary.test.ts tests/ai-accounting.test.ts",

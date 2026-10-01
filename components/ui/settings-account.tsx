@@ -120,13 +120,19 @@ export function SettingsAccount({
         }}
       >
         <TabsList
-          className="mb-5 grid w-full grid-cols-4"
+          className="mb-5 w-full justify-start sm:w-fit [&_[data-slot=tabs-trigger]]:flex-1 [&_[data-slot=tabs-trigger]]:px-2 sm:[&_[data-slot=tabs-trigger]]:flex-none sm:[&_[data-slot=tabs-trigger]]:px-3"
           aria-label="Settings"
         >
           <TabsTrigger value="account">Account</TabsTrigger>
           <TabsTrigger value="targets">Targets</TabsTrigger>
-          <TabsTrigger value="plan">Plan & usage</TabsTrigger>
-          <TabsTrigger value="data">Your data</TabsTrigger>
+          <TabsTrigger value="plan" aria-label="Plan & usage">
+            <span className="sm:hidden">Plan</span>
+            <span className="hidden sm:inline">Plan & usage</span>
+          </TabsTrigger>
+          <TabsTrigger value="data" aria-label="Your data">
+            <span className="sm:hidden">Data</span>
+            <span className="hidden sm:inline">Your data</span>
+          </TabsTrigger>
         </TabsList>
         <TabsContent value="account" keepMounted>
           <SettingsProfile

@@ -23,7 +23,7 @@ function ItemGroup({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 const itemVariants = cva(
-  "group/item flex w-full flex-wrap items-center rounded-base border-2 border-border bg-background text-sm font-base text-foreground transition-colors duration-100 outline-none ring-offset-white focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-black focus-visible:ring-offset-2 [a]:transition-colors [a]:hover:bg-main [a]:hover:text-main-foreground [button]:transition-colors [button]:hover:bg-main [button]:hover:text-main-foreground",
+  "group/item flex w-full flex-wrap items-center rounded-base border border-border bg-background text-sm font-base text-foreground transition-colors duration-100 outline-none ring-offset-background focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 [a]:transition-colors [a]:hover:bg-main [a]:hover:text-main-foreground [button]:transition-colors [button]:hover:bg-main [button]:hover:text-main-foreground",
   {
     variants: {
       size: {
@@ -68,7 +68,7 @@ const itemMediaVariants = cva(
         default: "bg-transparent",
         icon: "[&_svg:not([class*='size-'])]:size-5",
         image:
-          "size-10 overflow-hidden rounded-base border-2 border-border group-data-[size=sm]/item:size-8 group-data-[size=xs]/item:size-6 [&_img]:size-full [&_img]:object-cover",
+          "size-10 overflow-hidden rounded-base border border-border group-data-[size=sm]/item:size-8 group-data-[size=xs]/item:size-6 [&_img]:size-full [&_img]:object-cover",
       },
     },
     defaultVariants: {

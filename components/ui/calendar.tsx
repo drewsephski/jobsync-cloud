@@ -1,6 +1,6 @@
 "use client"
 
-import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react"
+import { ChevronDown, ChevronLeft, ChevronRight } from "@/components/ui/animated-icons"
 import {
   DayPicker,
   getDefaultClassNames,
@@ -30,7 +30,7 @@ function Calendar({
     <DayPicker
       showOutsideDays={showOutsideDays}
       className={cn(
-        "group/calendar rounded-base border-2 border-border bg-background p-3 font-heading text-foreground shadow-shadow",
+        "group/calendar rounded-base border border-border bg-background p-3 font-heading text-foreground shadow-shadow",
         className,
       )}
       captionLayout={captionLayout}
@@ -69,7 +69,7 @@ function Calendar({
           defaultClassNames.dropdowns,
         ),
         dropdown_root: cn(
-          "relative rounded-base border-2 border-border bg-secondary-background",
+          "relative rounded-base border border-border bg-secondary-background",
           defaultClassNames.dropdown_root,
         ),
         dropdown: cn("absolute inset-0 opacity-0", defaultClassNames.dropdown),

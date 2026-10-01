@@ -103,9 +103,23 @@ test("missing/inaccessible downloads and completion preserve sanitized 404", asy
   }
 })
 test("unexpected driver/provider failures never leak through API", async () => {
-  const response = await uploadApi(request(), async () => {
-    throw new Error("credential=private")
-  })
-  assert.equal(response.status, 503)
-  assert.deepEqual(await response.json(), { error: "service_unavailable" })
+  const events: string[] = []
+  const logger = mock.method(console, "warn", (value: string) =>
+    events.push(value)
+  )
+  try {
+    const response = await uploadApi(request(), async () => {
+      throw new Error("credential=private")
+    })
+    assert.equal(response.status, 503)
+    assert.deepEqual(await response.json(), { error: "service_unavailable" })
+    assert.equal(events.length, 1)
+    const event = JSON.parse(events[0]!)
+    assert.equal(event.event, "resume_upload_request_failed")
+    assert.equal(event.status, 503)
+    assert.equal(event.code, "service_unavailable")
+    assert.equal(events[0]!.includes("credential=private"), false)
+  } finally {
+    logger.mock.restore()
+  }
 })

@@ -245,9 +245,11 @@ export function createUploadService(
                 : "pending",
           completedAt: upload.validationCompletedAt?.toISOString() ?? null,
           message:
-            upload.status === "rejected"
-              ? rejectionMessage(upload.rejectionCode)
-              : null,
+            upload.status === "expired"
+              ? "This upload expired before the file arrived. Choose your file and upload it again."
+              : upload.status === "rejected"
+                ? rejectionMessage(upload.rejectionCode)
+                : null,
         },
       }
     },

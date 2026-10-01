@@ -124,16 +124,18 @@ async function signup(page: Page) {
   await page
     .getByLabel("Name", { exact: true })
     .fill("Applications isolated proof")
-  await page
-    .getByLabel("Email address")
-    .fill(`applications-${randomUUID()}@example.com`)
+  const email = `applications-${randomUUID()}@example.com`
+  await page.getByLabel("Email address").fill(email)
   await page.getByLabel("Password", { exact: true }).fill(password)
   await page
     .getByRole("button", { name: "Create Account", exact: true })
     .click()
-  await expect(page).toHaveURL(/\/onboarding$/)
+  await expect(page).toHaveURL(/\/auth\/verify$/)
   const session = await (await page.request.get("/api/auth/get-session")).json()
   users.push(session.user.id)
+  // Admin-only activation fixture, scoped to this new session and unique email.
+  await db.$executeRaw`UPDATE neon_auth."user" SET "emailVerified"=true WHERE id=${session.user.id} AND email=${email}`
+  await page.goto("/onboarding")
   return session.user.id as string
 }
 

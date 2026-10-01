@@ -61,7 +61,7 @@ function AlertDialogContent({
         data-slot="alert-dialog-content"
         data-size={size}
         className={cn(
-          "group/alert-dialog-content bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-base border-2 border-border p-6 shadow-shadow duration-200 outline-none sm:max-w-lg sm:data-[size=sm]:max-w-sm",
+          "group/alert-dialog-content bg-background data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-base border border-border p-6 shadow-shadow duration-200 outline-none sm:max-w-lg sm:data-[size=sm]:max-w-sm",
           className,
         )}
         {...props}
@@ -110,7 +110,7 @@ function AlertDialogMedia({
     <div
       data-slot="alert-dialog-media"
       className={cn(
-        "mb-2 flex size-12 shrink-0 items-center justify-center self-center rounded-base border-2 border-border bg-main text-main-foreground [&_svg]:size-6 sm:size-10 sm:self-start sm:[&_svg]:size-5 group-data-[size=sm]/alert-dialog-content:self-center",
+        "mb-2 flex size-12 shrink-0 items-center justify-center self-center rounded-base border border-border bg-main text-main-foreground [&_svg]:size-6 sm:size-10 sm:self-start sm:[&_svg]:size-5 group-data-[size=sm]/alert-dialog-content:self-center",
         className,
       )}
       {...props}

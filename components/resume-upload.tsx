@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { FileUp, Loader2 } from "lucide-react"
+import { FileUp, Loader2 } from "@/components/ui/animated-icons"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { FieldGroup } from "@/components/ui/field"
@@ -13,8 +13,14 @@ import { Label } from "@/components/ui/label"
 import {
   MAX_RESUME_FILE_SIZE_BYTES,
   RESUME_FILE_TYPES,
-  uploadIntentSchema,
 } from "@/lib/storage/resume-file"
+
+import {
+  requestUploadJson as requestJson,
+  resumeFileIntent,
+  transferResumeFile,
+  UploadRequestError,
+} from "@/lib/storage/upload-client"
 
 type UploadIntentResponse = {
   uploadId: string
@@ -35,12 +41,28 @@ type DownloadResponse = {
 const FRIENDLY_ERRORS: Record<number, string> = {
   400: "Choose a valid PDF or DOCX file no larger than 5 MiB.",
   401: "Your session has expired. Sign in again and retry.",
+  402: "Choose an active plan in Settings to upload your resume.",
+  403: "Your account cannot upload right now. Check your email verification and account status.",
   404: "This upload is no longer available. Start a new upload.",
   429: "Too many uploads are pending. Wait a moment and retry.",
   503: "File storage is temporarily unavailable. Try again shortly.",
 }
 
 function getErrorMessage(error: unknown, status?: number) {
+  if (error instanceof UploadRequestError) {
+    if (error.code === "email_verification_required")
+      return "Verify your email address before uploading your resume."
+    if (error.code === "subscription_required")
+      return "An active trial or plan is required. Check your plan in Settings before uploading."
+    if (error.code === "account_deleting")
+      return "This account is being deleted and cannot receive new uploads."
+    if (error.code === "invalid_origin")
+      return "Open JobSync at its main website and retry the upload."
+    if (error.code === "upload_expired")
+      return "The upload link expired. Choose your file and upload it again."
+    if (error.code === "upload_rejected")
+      return "The uploaded file was rejected. Export a new PDF or DOCX and try again."
+  }
   if (status && FRIENDLY_ERRORS[status]) return FRIENDLY_ERRORS[status]
   if (error instanceof Error && error.message === "Storage upload failed") {
     return "The private file upload did not finish. Check your connection and retry; processing starts only after the file arrives."
@@ -49,26 +71,6 @@ function getErrorMessage(error: unknown, status?: number) {
     return "The request could not reach JobSync. Check your connection and retry."
   }
   return "The upload could not be completed. Please try again."
-}
-
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(url, {
-      cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
-      ...init,
-    })
-  } catch {
-    throw new Error("Network request failed")
-  }
-
-  if (!response.ok) {
-    throw Object.assign(new Error("Request failed"), {
-      status: response.status,
-    })
-  }
-  return (await response.json()) as T
 }
 
 function formatSize(size: number) {
@@ -86,7 +88,7 @@ export function ResumeUpload({
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState(
     initialUploadId
-      ? "Upload received. Checking the file…"
+      ? "Checking your saved upload…"
       : "Choose a PDF or DOCX file to begin."
   )
   const [error, setError] = useState<string | null>(null)
@@ -155,10 +157,17 @@ export function ResumeUpload({
             )
             return
           }
-        } catch {
+        } catch (caught) {
           if (abort.signal.aborted) return
+          if (
+            caught instanceof UploadRequestError &&
+            [400, 401, 402, 403, 404].includes(caught.status)
+          ) {
+            setError(getErrorMessage(caught, caught.status))
+            return
+          }
           setStatus(
-            "We couldn’t check processing progress. We’ll retry shortly; your uploaded file is saved."
+            "We couldn’t check processing progress. We’ll retry shortly; your upload record is saved."
           )
         }
         delay = Math.min(delay ? delay * 1.5 : 1000, 5000)
@@ -190,11 +199,7 @@ export function ResumeUpload({
     setValidated(false)
 
     try {
-      const intent = uploadIntentSchema.parse({
-        fileName: file.name,
-        contentType: file.type,
-        sizeBytes: file.size,
-      })
+      const intent = resumeFileIntent(file)
       setStatus("Preparing a private upload…")
       const signed = await requestJson<UploadIntentResponse>(
         "/api/resume-uploads",
@@ -206,16 +211,7 @@ export function ResumeUpload({
       )
 
       setStatus("Uploading file…")
-      const putResponse = await fetch(signed.upload.url, {
-        method: signed.upload.method,
-        headers: signed.upload.headers,
-        body: file,
-        credentials: "omit",
-        signal: AbortSignal.timeout(60_000),
-      }).catch(() => {
-        throw new Error("Storage upload failed")
-      })
-      if (!putResponse.ok) throw new Error("Storage upload failed")
+      await transferResumeFile(file, signed)
 
       setStatus("Upload received. Checking the file…")
       setUploadId(signed.uploadId)
@@ -287,9 +283,8 @@ export function ResumeUpload({
           aria-describedby="resume-file-help"
         />
         <CardDescription id="resume-file-help">
-          PDF or DOCX · up to {formatSize(MAX_RESUME_FILE_SIZE_BYTES)}. AI
-          structuring continues in the background. The result is a draft for
-          your review.
+          PDF or DOCX · up to {formatSize(MAX_RESUME_FILE_SIZE_BYTES)}. We’ll
+          prepare a draft for you to review.
         </CardDescription>
       </FieldGroup>
 
@@ -320,15 +315,35 @@ export function ResumeUpload({
         ) : null}
       </FieldGroup>
 
-      <CardDescription role="status" aria-live="polite">
-        {status}
-      </CardDescription>
+      <FieldGroup
+        className={
+          uploadId && !error
+            ? "flex-row items-start gap-3 rounded-base bg-main/5 p-4"
+            : "gap-2"
+        }
+      >
+        {uploadId && !error && (
+          <Loader2
+            className="mt-1 size-4 shrink-0 text-main motion-safe:animate-spin"
+            aria-hidden="true"
+          />
+        )}
+        <FieldGroup className="gap-1">
+          <CardDescription role="status" aria-live="polite">
+            {status}
+          </CardDescription>
+          {uploadId && !error && (
+            <CardDescription className="text-xs">
+              This usually takes a few moments. Your progress is saved, and
+              nothing is accepted until you confirm it.
+            </CardDescription>
+          )}
+        </FieldGroup>
+      </FieldGroup>
       {error ? (
         <Alert variant="destructive" role="alert">
           <AlertTitle>Your resume needs attention</AlertTitle>
-          <AlertDescription>
-            {error} Choose a replacement file above to try again.
-          </AlertDescription>
+          <AlertDescription>{error}</AlertDescription>
         </Alert>
       ) : null}
     </FieldGroup>

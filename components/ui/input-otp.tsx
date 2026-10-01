@@ -1,7 +1,7 @@
 "use client"
 
 import { OTPInput, OTPInputContext } from "input-otp"
-import { Dot } from "lucide-react"
+import { Dot } from "@/components/ui/animated-icons"
 
 import * as React from "react"
 
@@ -50,7 +50,7 @@ function InputOTPSlot({
       data-slot="input-otp-slot"
       data-active={isActive}
       className={cn(
-        "relative flex size-10 items-center justify-center border-y-2 border-r-2 border-border bg-secondary-background text-sm font-base text-foreground first:rounded-l-base first:border-l-2 last:rounded-r-base transition-all aria-invalid:border-red-500 aria-invalid:ring-red-500",
+        "relative flex size-10 items-center justify-center border-y-2 border-r border-border bg-secondary-background text-sm font-base text-foreground first:rounded-l-base first:border-l last:rounded-r-base transition-all aria-invalid:border-red-500 aria-invalid:ring-red-500",
         isActive && "z-10 ring-1 ring-ring",
         className,
       )}

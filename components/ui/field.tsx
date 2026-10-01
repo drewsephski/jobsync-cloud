@@ -107,7 +107,7 @@ function FieldLabel({
     <Label
       data-slot="field-label"
       className={cn(
-        "group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-base has-[>[data-slot=field]]:border-2 has-[>[data-slot=field]]:border-border has-[>[data-slot=field]]:bg-secondary-background has-[>[data-slot=field]]:has-data-checked:bg-main has-[>[data-slot=field]]:has-data-checked:text-main-foreground has-[>[data-slot=field]]:has-[:focus-visible]:ring-2 has-[>[data-slot=field]]:has-[:focus-visible]:ring-black has-[>[data-slot=field]]:has-[:focus-visible]:ring-offset-2 *:data-[slot=field]:p-2.5",
+        "group/field-label peer/field-label flex w-fit gap-2 leading-snug group-data-[disabled=true]/field:opacity-50 has-[>[data-slot=field]]:rounded-base has-[>[data-slot=field]]:border has-[>[data-slot=field]]:border-border has-[>[data-slot=field]]:bg-secondary-background has-[>[data-slot=field]]:has-data-checked:bg-main has-[>[data-slot=field]]:has-data-checked:text-main-foreground has-[>[data-slot=field]]:has-[:focus-visible]:ring-2 has-[>[data-slot=field]]:has-[:focus-visible]:ring-ring has-[>[data-slot=field]]:has-[:focus-visible]:ring-offset-2 *:data-[slot=field]:p-2.5",
         "has-[>[data-slot=field]]:w-full has-[>[data-slot=field]]:flex-col",
         className,
       )}
@@ -164,7 +164,7 @@ function FieldSeparator({
       <div
         role="separator"
         aria-orientation="horizontal"
-        className="absolute inset-x-0 top-1/2 border-t-2 border-border"
+        className="absolute inset-x-0 top-1/2 border-t border-border"
       />
       {children && (
         <span

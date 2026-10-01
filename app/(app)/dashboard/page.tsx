@@ -1,11 +1,9 @@
 import { privateRead } from "@/lib/backend/private-read"
 import { createOnboardingService } from "@/lib/domain/onboarding/service"
 import { billingSummary } from "@/lib/billing/service"
-import { redirect } from "next/navigation"
 import Link from "next/link"
-import { ArrowUpRight, ArrowRight, Clock, Plus, Search } from "lucide-react"
+import { ArrowUpRight, ArrowRight, Clock, Plus } from "@/components/ui/animated-icons"
 import { requireCurrentProfile } from "@/lib/auth/context"
-import { signOut } from "@/app/auth/actions"
 import { db } from "@/lib/db"
 import {
   createApplicationService,
@@ -33,91 +31,245 @@ import {
 import { Badge } from "@/components/ui/badge"
 export default async function Dashboard() {
   const { user, profile } = await requireCurrentProfile()
-  if (!profile.onboardingCompletedAt) redirect("/onboarding")
-  const [data, discover, resume, usage] = await privateRead(() => Promise.all([
-    createApplicationService(db).dashboard(user),
-    createDiscoveryService(db).read(user),
-    createOnboardingService(db).read(user),
-    billingSummary(db, user.id),
-  ]))
+  const [data, discover, resume, usage] = await privateRead(() =>
+    Promise.all([
+      createApplicationService(db).dashboard(user),
+      createDiscoveryService(db).read(user),
+      createOnboardingService(db).read(user),
+      billingSummary(db, user.id),
+    ])
+  )
   const opportunities = discover.jobs
     .filter((job) => !job.applicationId)
     .slice(0, 3)
-  const next = data.due.length
-    ? data.due
-    : data.preparing.length
-      ? data.preparing
-      : data.upcoming.length
-        ? data.upcoming
-        : data.attention
+  // Urgent follow-ups lead, but upcoming interviews must remain visible too.
+  const next = [
+    ...data.due,
+    ...data.upcoming,
+    ...data.preparing,
+    ...data.attention,
+  ]
+    .filter((application, index, all) =>
+      all.findIndex((candidate) => candidate.id === application.id) === index
+    )
+    .slice(0, 5)
+  const needsResume = !resume.version?.confirmed
+  const hasApplications = data.activeCount > 0 || data.recent.length > 0
   return (
-    <FieldGroup className="discovery-surface gap-7 py-6 sm:px-4">
-      <FieldGroup className="flex-row flex-wrap items-start justify-between gap-4">
-        <FieldGroup className="min-w-0 flex-1 basis-full gap-2 sm:basis-0">
-          <CardDescription className="text-xs tracking-widest uppercase">
-            Your job search
-          </CardDescription>
-          <CardTitle
-            role="heading"
-            aria-level={1}
-            className="text-3xl sm:text-4xl"
-          >
-            Keep things moving.
-          </CardTitle>
-          <CardDescription>
-            {profile.displayName ?? user.name ?? "Welcome"}, here’s where your
-            search stands.
-          </CardDescription>
-        </FieldGroup>
-        <Button nativeButton={false} render={<Link href="/dashboard/jobs" />}>
-          Your applications <ArrowRight />
-        </Button>
+    <FieldGroup className="gap-8">
+      <FieldGroup className="gap-3">
+        <CardTitle
+          role="heading"
+          aria-level={1}
+          className="text-3xl tracking-tight sm:text-4xl"
+        >
+          {hasApplications
+            ? "Keep things moving."
+            : needsResume
+              ? "Your next job starts with you."
+              : "Let’s find your next opportunity."}
+        </CardTitle>
+        <CardDescription className="max-w-xl text-base">
+          {hasApplications
+            ? `${profile.displayName ?? user.name ?? "Welcome"}, here’s what deserves your attention.`
+            : needsResume
+              ? "Upload your resume and review your background. We’ll help you find roles worth pursuing."
+              : "Your resume is ready. Choose a company you like and discover roles that connect to your experience."}
+        </CardDescription>
       </FieldGroup>
-      <Card className="border-border">
-        <CardHeader>
-          <FieldGroup className="flex-row flex-wrap items-center justify-between gap-2">
+      {!hasApplications ? (
+        <Card className="border-0 bg-main/5 shadow-none">
+          <CardHeader>
+            <CardTitle className="text-xl">
+              {needsResume
+                ? "Start with your resume"
+                : "Put your experience to work"}
+            </CardTitle>
+            <CardDescription>
+              {needsResume
+                ? "A text-based PDF or Word file is all you need. You review every detail before we use it."
+                : "Keep a promising opening, track your application, and decide on the next step."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              nativeButton={false}
+              render={
+                <Link
+                  href={
+                    needsResume
+                      ? "/onboarding"
+                      : profile.onboardingCompletedAt
+                        ? "/dashboard/discover"
+                        : "/onboarding"
+                  }
+                />
+              }
+            >
+              {needsResume
+                ? resume.upload
+                  ? "Review resume"
+                  : "Upload resume"
+                : "Discover jobs"}{" "}
+              <ArrowRight />
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <FieldGroup className="gap-5">
+          <FieldGroup className="flex-row flex-wrap items-center justify-between gap-3">
             <CardTitle role="heading" aria-level={2} className="text-xl">
               What to work on next
             </CardTitle>
-            {data.dueCount > 0 && (
-              <Badge variant="neutral">
-                {data.dueCount}{" "}
-                {data.dueCount === 1 ? "follow-up due" : "follow-ups due"}
-              </Badge>
-            )}
+            {data.dueCount > 0 && <Badge>{data.dueCount} follow-ups due</Badge>}
           </FieldGroup>
-          <CardDescription>
-            {data.due.length
-              ? "Start with your due follow-ups. Update the next action after you’ve followed up."
-              : data.preparing.length
-                ? "You’ve saved these opportunities. Decide on a next step or record an application."
-                : data.upcoming.length
-                  ? "Your next follow-ups are coming up."
-                  : data.attention.length
-                    ? "Review your active applications and choose the next step."
-                    : "Find an opportunity or add a job you’re already pursuing."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {next.length ? (
+          <ItemGroup className="gap-3">
+            {next.map((a) => (
+              <NextApplication key={a.id} application={a} today={data.today} />
+            ))}
+          </ItemGroup>
+          {!next.length && (
+            <CardDescription>
+              Nothing urgent. Discover a new opportunity or review your
+              applications.
+            </CardDescription>
+          )}
+          <Button
+            className="self-start"
+            nativeButton={false}
+            render={<Link href="/dashboard/jobs" />}
+          >
+            Your applications <ArrowRight />
+          </Button>
+        </FieldGroup>
+      )}
+      {hasApplications && needsResume && (
+        <CardDescription>
+          Review your resume when you’re ready to discover more roles.{" "}
+          <Link
+            href="/onboarding"
+            className="text-main underline underline-offset-4"
+          >
+            Review resume
+          </Link>
+        </CardDescription>
+      )}
+      {hasApplications && (
+        <FieldGroup className="grid grid-cols-2 gap-6 border-y border-border py-6 sm:grid-cols-4">
+          {[
+            ["Active applications", data.activeCount],
+            ["Applied", data.appliedCount],
+            ["In interviews", data.interviewCount],
+            ["Offers", data.offerCount],
+          ].map(([label, value]) => (
+            <FieldGroup key={label} className="gap-1">
+              <CardDescription className="text-xs">{label}</CardDescription>
+              <CardTitle className="text-2xl tabular-nums">{value}</CardTitle>
+            </FieldGroup>
+          ))}
+        </FieldGroup>
+      )}
+      {!needsResume && (
+        <FieldGroup className="grid items-start gap-10 md:grid-cols-2">
+          <FieldGroup className="gap-5">
+            <CardTitle role="heading" aria-level={2} className="text-lg">
+              Fresh from Discover
+            </CardTitle>
             <ItemGroup className="gap-2">
-              {next.map((a) => (
-                <NextApplication
-                  key={a.id}
-                  application={a}
-                  today={data.today}
-                />
+              {opportunities.map((job) => (
+                <Item key={job.id} className="bg-secondary-background">
+                  <ItemContent>
+                    <ItemTitle>{job.title}</ItemTitle>
+                    <ItemDescription>
+                      {job.company} · {job.location}
+                    </ItemDescription>
+                  </ItemContent>
+                  <ItemActions>
+                    <Button
+                      size="icon-sm"
+                      variant="neutral"
+                      aria-label={`View ${job.title}`}
+                      nativeButton={false}
+                      render={<Link href="/dashboard/discover" />}
+                    >
+                      <ArrowUpRight />
+                    </Button>
+                  </ItemActions>
+                </Item>
               ))}
             </ItemGroup>
+            {!opportunities.length && (
+              <CardDescription>
+                {discover.watches.length
+                  ? "Your companies are being watched. Check Discover for fresh openings and refine your search."
+                  : "Choose your first company in Discover. We’ll watch for openings that match your background."}
+              </CardDescription>
+            )}
+            <Button
+              className="self-start"
+              variant="neutral"
+              nativeButton={false}
+              render={<Link href="/dashboard/discover" />}
+            >
+              Open Discover <ArrowUpRight />
+            </Button>
+          </FieldGroup>
+          {hasApplications ? (
+            <FieldGroup className="gap-5">
+              <CardTitle role="heading" aria-level={2} className="text-lg">
+                Recent movement
+              </CardTitle>
+              <ItemGroup>
+                {data.recent.slice(0, 4).map((event) => (
+                  <Item
+                    key={event.id}
+                    className="border-0 border-b border-border px-0"
+                  >
+                    <ItemContent>
+                      <ItemTitle className="text-sm">
+                        {event.company} ·{" "}
+                        {event.kind === "created"
+                          ? "Started tracking"
+                          : event.kind === "archived"
+                            ? "Archived"
+                            : event.kind === "restored"
+                              ? "Restored"
+                              : statusLabels[event.toStatus]}
+                      </ItemTitle>
+                      <ItemDescription className="text-xs">
+                        {event.title} · {event.occurredOn}
+                      </ItemDescription>
+                    </ItemContent>
+                    <ItemActions>
+                      <Button
+                        size="icon-sm"
+                        variant="neutral"
+                        aria-label={`Open application at ${event.company}`}
+                        nativeButton={false}
+                        render={
+                          <Link
+                            href={`/dashboard/jobs?application=${event.applicationId}`}
+                          />
+                        }
+                      >
+                        <ArrowUpRight />
+                      </Button>
+                    </ItemActions>
+                  </Item>
+                ))}
+              </ItemGroup>
+            </FieldGroup>
           ) : (
-            <FieldGroup className="flex-row flex-wrap gap-3">
+            <FieldGroup className="gap-4">
+              <CardTitle className="text-lg">
+                Already pursuing a role?
+              </CardTitle>
+              <CardDescription>
+                Add a job from anywhere. Keep your notes, dates, and next action
+                together.
+              </CardDescription>
               <Button
-                nativeButton={false}
-                render={<Link href="/dashboard/discover" />}
-              >
-                <Search /> Discover jobs
-              </Button>
-              <Button
+                className="self-start"
                 variant="neutral"
                 nativeButton={false}
                 render={<Link href="/dashboard/jobs" />}
@@ -126,226 +278,19 @@ export default async function Dashboard() {
               </Button>
             </FieldGroup>
           )}
-        </CardContent>
-      </Card>
-      <FieldGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          ["Active applications", data.activeCount],
-          ["Applied", data.appliedCount],
-          ["In interviews", data.interviewCount],
-          ["Offers", data.offerCount],
-        ].map(([label, value]) => (
-          <Card key={label}>
-            <CardContent className="pt-5">
-              <CardDescription className="text-xs">{label}</CardDescription>
-              <CardTitle className="mt-2 text-3xl">{value}</CardTitle>
-            </CardContent>
-          </Card>
-        ))}
-      </FieldGroup>
-      <Card>
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            Your workspace, ready for the next step
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ItemGroup className="gap-3">
-            <Item>
-              <ItemContent>
-                <ItemTitle>
-                  {resume.version?.confirmed
-                    ? `Resume confirmed · version ${resume.version.version}`
-                    : "Review your latest resume draft"}
-                </ItemTitle>
-                <ItemDescription>
-                  {resume.version?.confirmed
-                    ? "Your confirmed resume informs new matches."
-                    : "Confirm your latest saved version so matching uses the right experience."}
-                </ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Button
-                  variant="neutral"
-                  size="sm"
-                  nativeButton={false}
-                  render={<Link href="/dashboard/resume" />}
-                >
-                  Review resume
-                </Button>
-              </ItemActions>
-            </Item>
-            <Item>
-              <ItemContent>
-                <ItemTitle>
-                  {discover.watches.length
-                    ? `${discover.watches.length} company boards watched`
-                    : "Choose your first company"}
-                </ItemTitle>
-                <ItemDescription>
-                  {discover.watches.length
-                    ? `${discover.counts.new} new matches. Background scans follow your target roles and confirmed resume.`
-                    : "Watch a company in Discover to start receiving relevant openings."}
-                </ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Button
-                  variant="neutral"
-                  size="sm"
-                  nativeButton={false}
-                  render={<Link href="/dashboard/discover" />}
-                >
-                  Discover
-                </Button>
-              </ItemActions>
-            </Item>
-            <Item>
-              <ItemContent>
-                <ItemTitle>
-                  {usage.plan === "plus"
-                    ? "JobSync Plus"
-                    : usage.plan === "trial"
-                      ? "Trial allowances"
-                      : "Review your plan"}
-                </ItemTitle>
-                <ItemDescription>
-                  {usage.limits
-                    ? `${Math.max(0, usage.limits.resumeRuns - usage.resumeRunsUsed)} resume AI runs and ${Math.max(0, usage.limits.jobAnalyses - usage.jobAnalysesUsed)} job analyses remaining this period.`
-                    : "Plan details and account controls live together in Settings."}
-                </ItemDescription>
-              </ItemContent>
-              <ItemActions>
-                <Button
-                  variant="neutral"
-                  size="sm"
-                  nativeButton={false}
-                  render={<Link href="/dashboard/settings?tab=plan" />}
-                >
-                  Usage
-                </Button>
-              </ItemActions>
-            </Item>
-          </ItemGroup>
-        </CardContent>
-      </Card>
-      <FieldGroup className="grid items-start gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2} className="text-lg">
-              Fresh from Discover
-            </CardTitle>
-            <CardDescription>
-              Current matches you haven’t tracked yet.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ItemGroup className="gap-2">
-              {opportunities.map((job) => (
-                <Item key={job.id} className="border-border">
-                  <ItemContent className="min-w-0">
-                    <ItemTitle className="break-words whitespace-normal">
-                      {job.title}
-                    </ItemTitle>
-                    <ItemDescription>
-                      {job.company} · {job.location}
-                    </ItemDescription>
-                  </ItemContent>
-                </Item>
-              ))}
-              {!opportunities.length && (
-                <CardDescription>
-                  {discover.watches.length
-                    ? "No untracked matches in your current Discover results. Check back after the next background refresh."
-                    : "Watch a company to start seeing relevant openings."}
-                </CardDescription>
-              )}
-            </ItemGroup>
-            <Button
-              className="mt-4"
-              variant="neutral"
-              nativeButton={false}
-              render={<Link href="/dashboard/discover" />}
-            >
-              Open Discover <ArrowUpRight />
-            </Button>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle role="heading" aria-level={2} className="text-lg">
-              Recent movement
-            </CardTitle>
-            <CardDescription>
-              Your recorded application history.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ItemGroup className="gap-2">
-              {data.recent.map((event) => (
-                <Item
-                  key={event.id}
-                  className="border-0 border-b border-border px-0"
-                >
-                  <ItemContent>
-                    <ItemTitle className="text-sm">
-                      {event.company} ·{" "}
-                      {event.kind === "created"
-                        ? "Started tracking"
-                        : event.kind === "archived"
-                          ? "Archived"
-                          : event.kind === "restored"
-                            ? "Restored"
-                            : statusLabels[event.toStatus]}
-                    </ItemTitle>
-                    <ItemDescription className="line-clamp-none text-xs">
-                      {event.title}
-                      {event.stageName ? ` · ${event.stageName}` : ""} ·{" "}
-                      {event.occurredOn}
-                    </ItemDescription>
-                  </ItemContent>
-                  <ItemActions>
-                    <Button
-                      size="icon"
-                      variant="neutral"
-                      aria-label={`Open application at ${event.company}`}
-                      nativeButton={false}
-                      render={
-                        <Link
-                          href={`/dashboard/jobs?application=${event.applicationId}`}
-                        />
-                      }
-                    >
-                      <ArrowUpRight />
-                    </Button>
-                  </ItemActions>
-                </Item>
-              ))}
-              {!data.recent.length && (
-                <CardDescription>
-                  Track your first job to start your history.
-                </CardDescription>
-              )}
-            </ItemGroup>
-          </CardContent>
-        </Card>
-      </FieldGroup>
-      <FieldGroup className="flex-row flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
-        <Button
-          variant="neutral"
-          nativeButton={false}
-          render={<Link href="/dashboard/resume" />}
-        >
-          Review resume
-        </Button>
-        <form action={signOut}>
-          <Button variant="neutral" type="submit">
-            Sign out
-          </Button>
-        </form>
-      </FieldGroup>
+        </FieldGroup>
+      )}
+      <CardDescription className="text-xs">
+        {usage.plan === "trial"
+          ? "Your trial is active. View your allowances in Settings."
+          : usage.plan === "plus"
+            ? "JobSync Plus · view your plan in Settings."
+            : "View your plan and saved data in Settings."}
+      </CardDescription>
     </FieldGroup>
   )
 }
+
 function NextApplication({
   application: a,
   today,
@@ -369,6 +314,9 @@ function NextApplication({
         <ItemDescription className="line-clamp-none">
           {a.company} · {a.title}
         </ItemDescription>
+        <CardDescription className="text-xs">
+          {statusLabels[a.status]}{a.stageName ? ` · ${a.stageName}` : ""}
+        </CardDescription>
         {a.followUpOn && (
           <CardDescription
             className={`flex items-center gap-1 text-xs ${a.followUpOn < today ? "text-foreground" : ""}`}

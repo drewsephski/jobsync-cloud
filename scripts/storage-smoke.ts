@@ -1,5 +1,6 @@
 import nextEnv from "@next/env"
 import { HeadBucketCommand, GetBucketCorsCommand } from "@aws-sdk/client-s3"
+import { storageOrigins, verifyStorageCors } from "../lib/storage/cors"
 nextEnv.loadEnvConfig(process.cwd(), process.env.NODE_ENV !== "production")
 try {
   const { storageClient, STORAGE_BUCKET } =
@@ -10,15 +11,12 @@ try {
     const cors = await storageClient.send(
       new GetBucketCorsCommand({ Bucket: STORAGE_BUCKET })
     )
-    const rules = cors.CORSRules ?? []
-    if (
-      rules.length !== 1 ||
-      rules[0].AllowedOrigins?.length !== 1 ||
-      rules[0].AllowedOrigins[0] !== serverEnv.APP_ORIGIN
+    verifyStorageCors(
+      cors.CORSRules ?? [],
+      storageOrigins(serverEnv.APP_ORIGIN, process.env.STORAGE_ALLOWED_ORIGINS)
     )
-      throw new Error("CORS mismatch")
     console.log(
-      "Storage smoke passed: branch bucket reachable; exact application CORS origin configured. No objects written."
+      "Storage smoke passed: branch bucket reachable; application CORS origins, methods, and signed headers verified. No objects written."
     )
   } finally {
     storageClient.destroy()

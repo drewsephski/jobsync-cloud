@@ -8,7 +8,7 @@ function Table({ className, ...props }: React.ComponentProps<"table">) {
       <table
         data-slot="table"
         className={cn(
-          "w-full caption-bottom border-2 border-border text-sm",
+          "w-full caption-bottom border border-border text-sm",
           className,
         )}
         {...props}
@@ -21,7 +21,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b-2 [&_tr]:border-border", className)}
+      className={cn("[&_tr]:border-b [&_tr]:border-border", className)}
       {...props}
     />
   )
@@ -42,7 +42,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
     <tfoot
       data-slot="table-footer"
       className={cn(
-        "border-t-2 border-border bg-background font-base text-foreground last:[&>tr]:border-b-0",
+        "border-t border-border bg-background font-base text-foreground last:[&>tr]:border-b-0",
         className,
       )}
       {...props}
@@ -55,7 +55,7 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b-2 border-border transition-colors text-foreground bg-background font-base data-[state=selected]:bg-main data-[state=selected]:text-main-foreground",
+        "border-b border-border transition-colors text-foreground bg-background font-base data-[state=selected]:bg-main data-[state=selected]:text-main-foreground",
         className,
       )}
       {...props}
