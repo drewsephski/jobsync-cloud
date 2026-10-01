@@ -96,24 +96,27 @@ Deploy new configuration to web and Functions before revoking old credentials.
 Neon Function environment updates merge values; explicitly clear retired optional
 values instead of simply omitting them.
 
-| Credential                     | Result                                                                                      |
-| ------------------------------ | ------------------------------------------------------------------------------------------- |
-| Production database            | New application role; old owner password reset; old connection rejected                     |
-| Migration connection           | Rotated owner password in direct migration URL; runtime remains least-privilege role        |
-| Isolated test database         | Password rotated; old rejected; suite passed using new credentials                          |
-| Object Storage                 | New pair deployed; old key deleted and rejected                                             |
-| Neon account-cleanup key       | New project-scoped key deployed; old deleted and rejected                                   |
-| App auth cookie secret         | Replaced; does not claim to revoke all Managed Auth primary sessions                        |
-| Discovery wake secret          | Replaced; old returns 401; current authenticates; overlap value explicitly cleared          |
-| Stripe test cleanup key        | Replacement deployed to web/worker; old key retirement requires final provider confirmation |
-| Stripe old test webhook secret | Replaced by live secret; old signature rejected; stale preview secret removed               |
-| Vercel OIDC                    | Old short-lived token expired; removed from local configuration                             |
-| OpenRouter                     | Retained by explicit operator instruction; not rotated                                      |
+| Credential                     | Result                                                                                                            |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| Production database            | New application role; old owner password reset; old connection rejected                                           |
+| Migration connection           | Rotated owner password in direct migration URL; runtime remains least-privilege role                              |
+| Isolated test database         | Password rotated; old rejected; suite passed using new credentials                                                |
+| Object Storage                 | New pair deployed; old key deleted and rejected                                                                   |
+| Neon account-cleanup key       | New project-scoped key deployed; old deleted and rejected                                                         |
+| App auth cookie secret         | Replaced; does not claim to revoke all Managed Auth primary sessions                                              |
+| Discovery wake secret          | Replaced; old returns 401; current authenticates; overlap value explicitly cleared                                |
+| Stripe test cleanup key        | Correct main-account test-mode replacement deployed; old key expired and rejected (401); new cleanup proof passed |
+| Stripe old test webhook secret | Legacy test endpoint retired; old signature rejected; stale preview secret removed                                |
+| Vercel OIDC                    | Old short-lived token expired; removed from local configuration                                                   |
+| OpenRouter                     | Retained by explicit operator instruction; not rotated                                                            |
 
-The sandbox cleanup key is separate from the live billing key. Existing sandbox
-customer records are preserved and cleaned up through the matching sandbox
-account if their owner later deletes an account. Preview billing remains disabled;
-its key was replaced and its obsolete, unconfigured webhook secret retired.
+The main account's test-mode cleanup key is separate from the live billing key.
+A separate Stripe sandbox has a different account ID and cannot clean up legacy
+main-account test-mode records. A mistaken separate-sandbox rotation was caught
+and corrected before release. The new main-account key passed a create/delete
+proof through the real cleanup service with an isolated test customer. Preview
+billing remains disabled; its key was replaced with the correct main-account key
+and its obsolete webhook secret retired.
 Keep migrations on the direct admin URL; runtime and Functions use the application
 role. Never reset database passwords before deployments have working replacements.
 

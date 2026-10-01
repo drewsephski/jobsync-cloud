@@ -545,7 +545,16 @@ test("@discovery-live new users find jobs before following companies and recover
       { timeout: 30_000 }
     )
     .toBe(true)
-  const watchToIngestionMs = Date.now() - watchStartedAt
+  // Measure the durable completion time, excluding browser/context teardown
+  // and polling delay after the board has already finished ingestion.
+  const ingestedBoard = await db.atsBoard.findUniqueOrThrow({
+    where: { id: boardBefore.id },
+    select: { lastSuccessAt: true },
+  })
+  assert.ok(ingestedBoard.lastSuccessAt)
+  const watchToIngestionMs =
+    ingestedBoard.lastSuccessAt.getTime() - watchStartedAt
+  expect(watchToIngestionMs).toBeGreaterThanOrEqual(0)
   expect(watchToIngestionMs).toBeLessThanOrEqual(15_000)
   evidence.latencyMs = {
     ...(evidence.latencyMs as Record<string, number>),
