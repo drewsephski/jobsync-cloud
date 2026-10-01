@@ -840,6 +840,17 @@ test("@discovery-live new users find jobs before following companies and recover
   await expect(
     proofPage.getByRole("heading", { name: "Your resume.", exact: true })
   ).toBeVisible()
+  await expect
+    .poll(
+      async () =>
+        (
+          await db.resume.findFirstOrThrow({
+            where: { ownerUserId: owner },
+            select: { confirmedVersionId: true },
+          })
+        ).confirmedVersionId
+    )
+    .not.toBe(confirmedBeforeEdit.confirmedVersionId)
   const savedAfterResumeChange = await (
     await proofPage.request.get("/api/discovery?state=saved")
   ).json()

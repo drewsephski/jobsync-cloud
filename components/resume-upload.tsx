@@ -1,4 +1,5 @@
 "use client"
+import { productEventOnce } from "@/lib/analytics/client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
@@ -135,6 +136,7 @@ export function ResumeUpload({
             return
           }
           if (result.validation.state === "valid") {
+            productEventOnce("resume_uploaded")
             setValidated(true)
             setStatus(
               result.structuring?.message ??

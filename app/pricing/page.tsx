@@ -40,7 +40,7 @@ export default function Pricing() {
       "What remains after the trial expires?",
       liveBilling
         ? "Your saved records, data export, and original resume downloads remain available. Plus is required to continue AI, discovery, and workspace edits after your trial."
-        : "Plus upgrades are being prepared and live charging is disabled. Existing tracking and resume editing remain available during this rollout. Trial AI and discovery allowances still apply. Saved records, export, and original downloads remain available.",
+        : "Plus subscriptions aren’t available yet. You won’t be charged. Existing tracking and resume editing remain available while subscriptions are unavailable. Trial AI and discovery allowances still apply. Saved records, export, and original downloads remain available.",
     ],
     [
       "Do I need to pay for AI separately?",
@@ -132,8 +132,7 @@ export default function Pricing() {
           </FieldGroup>
           {!liveBilling && (
             <CardDescription className="text-center text-sm">
-              Plus upgrades are being prepared. Live charging is currently
-              disabled.
+              Plus subscriptions aren’t available yet. You won’t be charged.
             </CardDescription>
           )}
         </FieldGroup>

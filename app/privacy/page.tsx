@@ -25,9 +25,17 @@ export default function Privacy() {
         {
           title: "Providers and operational data",
           paragraphs: [
-            "Vercel hosts the web application. Neon provides Postgres, managed Better Auth, private object storage, scheduled triggers, and worker functions. OpenRouter and the selected model provider process AI requests. Stripe handles checkout, billing management, and subscription information when enabled. Live charging is currently disabled in Stripe test mode.",
+            "Vercel hosts the web application. Neon provides Postgres, managed Better Auth, private object storage, scheduled triggers, and worker functions. OpenRouter and the selected model provider process AI requests. Stripe handles checkout, billing management, and subscription information when you choose an available paid plan. JobSync does not receive or store your full payment-card details.",
             "Application error events use route templates and fixed status or error codes. They exclude request bodies, resume content, prompts, AI responses, signed URLs, credentials, and email addresses. Worker events can include internal run or invocation identifiers. Provider infrastructure logs and retention are governed by the configured provider accounts.",
-            "Email verification and recovery delivery depend on Neon Managed Auth’s email configuration. Production SMTP and Google OAuth activation are separate launch checks. No reliable delivery or Google sign-in claim is made until those flows are verified.",
+            "Neon Managed Auth sends verification and recovery messages through Resend, using the JobSync Cloud sender on the operator’s verified sitterfolio.com domain. Resend receives your account email and the message needed for sign-in or recovery.",
+          ],
+        },
+        {
+          title: "Product measurement and feedback",
+          paragraphs: [
+            "Vercel Web Analytics measures visits to known page paths and fixed product events such as resume confirmation, finding jobs, saving an opportunity, and viewing a plan. Event details contain only numeric elapsed times. Application URLs exclude query strings and fragments. JobSync does not add account identifiers, emails, resume text, job descriptions, prompts, AI responses, signed links, notes, or application content to analytics.",
+            "Vercel uses request information for privacy-preserving visitor measurement; its infrastructure and retention policies still apply. JobSync adds no advertising trackers or analytics cookies. Short-lived timing values and event flags in your browser tab measure onboarding and search speed. Measurement is best effort and does not affect your account or plan.",
+            "Feedback is optional. Only the category and message you choose to send are stored with your account identifier in the operator’s private feedback queue. No workspace content or files are attached automatically. Feedback is included in your data export and removed with account deletion.",
           ],
         },
         {
@@ -42,7 +50,7 @@ export default function Privacy() {
         {
           title: "Questions",
           paragraphs: [
-            "JobSync Cloud is maintained through the drewsephski/jobsync-cloud project. Use Contact the maintainer below for product or privacy questions. GitHub issues are public: include only a general description, never passwords, resume content, billing details, or private account information.",
+            "Use Contact & support below for billing problems, account deletion issues, privacy or data requests, and security concerns. The support page lists the available private contact route. GitHub issues are public and should contain only non-private product questions. Never include passwords, sign-in codes, resume content, billing details, or private account information.",
           ],
         },
       ]}

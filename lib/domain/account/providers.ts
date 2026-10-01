@@ -52,7 +52,12 @@ export function accountCleanup(
           (env.STRIPE_MODE === "live" ? env.STRIPE_SECRET_KEY : undefined))
         : (env.STRIPE_TEST_CLEANUP_SECRET_KEY ??
           (env.STRIPE_MODE === "test" ? env.STRIPE_SECRET_KEY : undefined))
-      if (!secret?.startsWith(customer.livemode ? "sk_live_" : "sk_test_"))
+      if (
+        !secret ||
+        !new RegExp(`^(sk|rk)_${customer.livemode ? "live" : "test"}_`).test(
+          secret
+        )
+      )
         throw new Error("cleanup_billing_mode_unavailable")
       const stripe = new Stripe(secret, {
         timeout: 10_000,

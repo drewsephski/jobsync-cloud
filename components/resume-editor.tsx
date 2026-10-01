@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { productEventOnce, metricElapsed } from "@/lib/analytics/client"
 import { Check, FileText } from "@/components/ui/animated-icons"
 import type { OnboardingState } from "@/lib/domain/onboarding/service"
 import {
@@ -90,6 +91,7 @@ export function ResumeEditor({
       setConflict(false)
       setAcknowledged(false)
       if (action === "confirm") {
+        productEventOnce("resume_confirmed", metricElapsed("signup"))
         setNotice(
           "Resume confirmed. This exact version is now your accepted resume."
         )

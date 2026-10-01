@@ -1,3 +1,4 @@
+import { productEvent, productEventOnce } from "@/lib/analytics/client"
 import type { ApplicationsData } from "@/lib/domain/applications/service"
 export class ApplicationApiError extends Error {
   constructor(public code: string) {
@@ -31,6 +32,14 @@ export async function applicationRequest(
   })
   const result = await response.json()
   if (!response.ok) throw new ApplicationApiError(result.error)
+  if (input && typeof input === "object" && "action" in input) {
+    if (result.created) productEventOnce("first_application_tracked")
+    if (input.action === "transition" && "status" in input) {
+      if (input.status === "applied") productEvent("application_applied")
+      if (input.status === "interview") productEvent("application_interview")
+      if (input.status === "offer") productEvent("application_offer")
+    }
+  }
   return result
 }
 export async function loadApplications(): Promise<ApplicationsData> {

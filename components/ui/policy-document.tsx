@@ -54,11 +54,8 @@ export function PolicyDocument({
           <LinkButton variant="neutral" href="/terms">
             Terms
           </LinkButton>
-          <LinkButton
-            variant="neutral"
-            href="https://github.com/drewsephski/jobsync-cloud/issues/new"
-          >
-            Contact the maintainer
+          <LinkButton variant="neutral" href="/support">
+            Contact & support
           </LinkButton>
         </FieldGroup>
       </FieldGroup>

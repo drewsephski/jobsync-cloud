@@ -1,5 +1,19 @@
 import { defineConfig } from "@neon/config/v1"
 
+// Explicit bindings allow an additive credential cutover before old credentials
+// are revoked. Values remain provider secrets, never build artifacts or logs.
+const privateRuntimeEnv = Object.fromEntries(
+  [
+    "DATABASE_URL",
+    "AWS_ENDPOINT_URL_S3",
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_REGION",
+  ]
+    .filter((key) => process.env[key])
+    .map((key) => [key, process.env[key]!])
+)
+
 export default defineConfig({
   auth: true,
   functions: {
@@ -18,6 +32,7 @@ export default defineConfig({
         ]
           .filter((key) => process.env[key])
           .map((key) => [key, process.env[key]!])
+          .concat(Object.entries(privateRuntimeEnv))
       ),
       dev: { port: 8789 },
     },
@@ -25,6 +40,7 @@ export default defineConfig({
       name: "Shared job discovery worker",
       source: "./functions/discovery-worker.ts",
       env: {
+        ...privateRuntimeEnv,
         STRIPE_MODE: process.env.STRIPE_MODE ?? "live",
         ...(process.env.OPENROUTER_API_KEY
           ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
@@ -32,6 +48,10 @@ export default defineConfig({
         ...(process.env.DISCOVERY_WAKE_SECRET
           ? { DISCOVERY_WAKE_SECRET: process.env.DISCOVERY_WAKE_SECRET }
           : {}),
+        // The provider merges environment updates. Explicitly clear the old
+        // overlap secret so omitting it cannot preserve retired access.
+        DISCOVERY_WAKE_PREVIOUS_SECRET:
+          process.env.DISCOVERY_WAKE_PREVIOUS_SECRET ?? "",
       },
       dev: { port: 8788 },
     },
@@ -40,6 +60,7 @@ export default defineConfig({
       source: "./functions/resume-worker.ts",
       externalPackages: ["unpdf", "fast-xml-parser", "mammoth"],
       env: {
+        ...privateRuntimeEnv,
         STRIPE_MODE: process.env.STRIPE_MODE ?? "live",
         ...(process.env.OPENROUTER_API_KEY
           ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }

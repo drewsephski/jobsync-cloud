@@ -209,6 +209,18 @@ export function AppShell({
             >
               {children}
             </motion.div>
+            <FieldGroup className="mt-8 flex-row flex-wrap gap-4">
+              <LinkButton
+                href="/dashboard/feedback"
+                variant="neutral"
+                size="sm"
+              >
+                Give feedback
+              </LinkButton>
+              <LinkButton href="/support" variant="neutral" size="sm">
+                Support
+              </LinkButton>
+            </FieldGroup>
           </FieldGroup>
         </main>
       </FieldGroup>

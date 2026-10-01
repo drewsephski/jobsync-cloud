@@ -59,6 +59,7 @@ async function privateCounts(owner: string) {
     db.companyWatch.count({ where: { ownerUserId: owner } }),
     db.processingRun.count({ where: { ownerUserId: owner } }),
     db.aiUsageReservation.count({ where: { ownerUserId: owner } }),
+    db.productFeedback.count({ where: { ownerUserId: owner } }),
   ])
 }
 async function deleteInBrowser(page: Page) {
@@ -90,7 +91,6 @@ test.beforeAll(async () => {
     )
   )
   baseline = await db.userProfile.findMany({
-    where: { id: { not: "7061368b-e0fa-4f80-beca-f6d0f920dbb1" } },
     select: { id: true, createdAt: true },
     orderBy: { id: "asc" },
   })
@@ -113,7 +113,7 @@ test.afterAll(async () => {
         timeout: 900_000,
         intervals: [10_000],
       })
-      .toEqual(users.map(() => Array(10).fill(0)))
+      .toEqual(users.map(() => Array(11).fill(0)))
     for (const owner of users) {
       expect(
         (
@@ -265,19 +265,21 @@ test("@launch production workflow, responsive themes, export, durable deletion a
     .getByRole("link", { name: "Discover", exact: true })
     .first()
     .click()
-  await page.getByLabel("Find a company").fill("Figma")
-  await page.getByRole("button", { name: "Watch Figma", exact: true }).click()
   await expect
     .poll(
       async () => {
-        await page.getByRole("button", { name: "Refresh", exact: true }).click()
-        return page
-          .getByRole("button", { name: "Track application", exact: true })
-          .count()
+        const response = await page.request.get("/api/discovery")
+        return response.ok() ? (await response.json()).jobs.length : 0
       },
-      { timeout: 360_000, intervals: [15_000] }
+      { timeout: 180_000, intervals: [3000] }
     )
     .toBeGreaterThan(0)
+  await page.reload()
+  await page.getByRole("button", { name: "Save", exact: true }).first().click()
+  await page.getByRole("tab", { name: /^Saved / }).click()
+  await expect(
+    page.getByRole("button", { name: "Unsave", exact: true })
+  ).toHaveCount(1)
   await page
     .getByRole("button", { name: "Track application", exact: true })
     .first()
@@ -287,6 +289,53 @@ test("@launch production workflow, responsive themes, export, durable deletion a
     page.getByRole("heading", { name: "Applications", exact: true })
   ).toBeVisible()
   expect(await db.application.count({ where: { ownerUserId: owner } })).toBe(1)
+  const application = await db.application.findFirstOrThrow({
+    where: { ownerUserId: owner },
+  })
+  const open = page.getByRole("button", {
+    name: `Open ${application.title} at ${application.company}`,
+    exact: true,
+  })
+  await open.focus()
+  await page.keyboard.press("Enter")
+  for (const status of ["Applied", "Interview", "Offer"]) {
+    await page
+      .getByRole("button", { name: "Record movement", exact: true })
+      .click()
+    await page.getByLabel("Status", { exact: true }).click()
+    await page.getByRole("option", { name: status, exact: true }).click()
+    const appData = await (await page.request.get("/api/applications")).json()
+    await page.getByLabel("Movement date", { exact: true }).fill(appData.today)
+    await page
+      .getByRole("button", { name: "Save movement", exact: true })
+      .focus()
+    await page.keyboard.press("Enter")
+    await expect
+      .poll(
+        async () =>
+          (
+            await db.application.findUniqueOrThrow({
+              where: { id: application.id },
+            })
+          ).status
+      )
+      .toBe(status.toLowerCase())
+  }
+  await page.keyboard.press("Escape")
+  await page.goto("/dashboard/feedback")
+  await page
+    .getByRole("radio", { name: "Confusing experience", exact: true })
+    .check()
+  await page
+    .getByLabel("Your feedback")
+    .fill(
+      "Synthetic launch feedback: the workflow was completed with keyboard controls."
+    )
+  await page.getByRole("button", { name: "Send feedback", exact: true }).click()
+  await expect(page.getByRole("status")).toContainText(
+    "feedback was received privately"
+  )
+
   await page.getByRole("link", { name: "Home", exact: true }).first().click()
   await expect(
     page.getByRole("heading", { name: "What to work on next" })
@@ -332,15 +381,20 @@ test("@launch production workflow, responsive themes, export, durable deletion a
           if (await active.count()) {
             const indicator = dock.locator('[data-slot="navigation-indicator"]')
             await expect(indicator).toBeVisible()
-            await expect.poll(async () => {
-              const target = await active.boundingBox()
-              const surface = await indicator.boundingBox()
-              return !!target && !!surface &&
-                Math.abs(target.x - surface.x) < 2 &&
-                Math.abs(target.y - surface.y) < 2 &&
-                Math.abs(target.width - surface.width) < 2 &&
-                Math.abs(target.height - surface.height) < 2
-            }).toBe(true)
+            await expect
+              .poll(async () => {
+                const target = await active.boundingBox()
+                const surface = await indicator.boundingBox()
+                return (
+                  !!target &&
+                  !!surface &&
+                  Math.abs(target.x - surface.x) < 2 &&
+                  Math.abs(target.y - surface.y) < 2 &&
+                  Math.abs(target.width - surface.width) < 2 &&
+                  Math.abs(target.height - surface.height) < 2
+                )
+              })
+              .toBe(true)
           }
         }
       }
@@ -356,7 +410,7 @@ test("@launch production workflow, responsive themes, export, durable deletion a
     page.getByText("Your 14-day trial", { exact: true })
   ).toBeVisible()
   await expect(
-    page.getByText("Live charging is disabled.", { exact: false })
+    page.getByText("You won’t be charged.", { exact: false })
   ).toBeVisible()
   await page.screenshot({
     path: "output/playwright/launch-plan-desktop.png",
@@ -405,6 +459,7 @@ test("@launch production workflow, responsive themes, export, durable deletion a
   const data = await exported.json()
   expect(data.account.name).toBe("Launch proof updated")
   expect(data.applications).toHaveLength(1)
+  expect(data.feedback).toHaveLength(1)
   expect(data.resumes[0].versions.length).toBeGreaterThan(0)
   expect(JSON.stringify(data)).not.toContain("Isolated tenant sentinel")
   const upload = await db.resumeUpload.findFirstOrThrow({
@@ -434,7 +489,7 @@ test("@launch production workflow, responsive themes, export, durable deletion a
       { timeout: 900_000, intervals: [10_000] }
     )
     .toBe("completed")
-  expect(await privateCounts(owner)).toEqual(Array(10).fill(0))
+  expect(await privateCounts(owner)).toEqual(Array(11).fill(0))
   expect(
     await db.application.findUnique({ where: { id: otherApplication.id } })
   ).toEqual(otherSnapshot)

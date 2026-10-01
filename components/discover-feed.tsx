@@ -1,5 +1,11 @@
 "use client"
 import { useEffect, useRef, useState } from "react"
+import {
+  productEventOnce,
+  metricElapsed,
+  metricStarted,
+  resetSearchMetric,
+} from "@/lib/analytics/client"
 import Link from "next/link"
 import {
   Building2,
@@ -81,6 +87,21 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
   const companySearch = useRef<HTMLInputElement>(null)
   const generation = useRef(0)
   useEffect(() => {
+    if (data.jobs.length)
+      productEventOnce("first_results_shown", metricElapsed("find_jobs"))
+    const started = metricStarted("find_jobs")
+    if (
+      started &&
+      data.jobs.some(
+        (job) =>
+          !job.stale &&
+          job.aiAnalyzedAt &&
+          new Date(job.aiAnalyzedAt).getTime() >= started
+      )
+    )
+      productEventOnce("first_ai_result_shown", metricElapsed("find_jobs"))
+  }, [data.jobs])
+  useEffect(() => {
     if (!data.enhancing && !data.monitoring) return
     const controller = new AbortController()
     const startedAt = Date.now()
@@ -147,6 +168,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
       })
       if (!response.ok)
         throw new Error("Could not track this application. Please try again.")
+      productEventOnce("first_application_tracked")
       setData(await request(query, filter))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Please try again.")
@@ -159,6 +181,13 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
     setBusy(true)
     setError("")
     try {
+      if (
+        input &&
+        typeof input === "object" &&
+        "action" in input &&
+        input.action === "scan"
+      )
+        resetSearchMetric()
       const response = await fetch("/api/discovery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -180,6 +209,13 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
         )
       }
       const result = await response.json()
+      if (
+        input &&
+        typeof input === "object" &&
+        "state" in input &&
+        input.state === "saved"
+      )
+        productEventOnce("first_job_saved")
       if (result.data) {
         setFilter("new")
         setData(result.data)

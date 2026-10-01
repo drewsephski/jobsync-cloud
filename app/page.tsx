@@ -8,6 +8,7 @@ import { ProductPreview } from "@/components/ui/product-preview"
 import { ProductFaq } from "@/components/ui/product-faq"
 
 export const metadata: Metadata = {
+  alternates: { canonical: "/" },
   title: "JobSync Cloud — a clearer path to your next job",
   description:
     "Upload your resume, discover relevant jobs, and keep your search moving. Try JobSync free for 14 days. No card or API key required.",

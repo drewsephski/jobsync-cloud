@@ -48,6 +48,7 @@ export function PublicShell({ children }: { children: React.ReactNode }) {
             <Link href="/pricing">Pricing</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
+            <Link href="/support">Support</Link>
           </nav>
         </FieldGroup>
       </footer>

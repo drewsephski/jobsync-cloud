@@ -14,10 +14,12 @@ export function billingConfig() {
   if (!parsed.success) throw new Error("billing_not_configured")
   const config = parsed.data
   if (
-    !config.STRIPE_SECRET_KEY.startsWith(
-      config.STRIPE_MODE === "test" ? "sk_test_" : "sk_live_"
+    !new RegExp(`^(sk|rk)_${config.STRIPE_MODE}_`).test(
+      config.STRIPE_SECRET_KEY
     )
   )
     throw new Error("billing_mode_mismatch")
+  if (config.STRIPE_MODE === "live" && !config.STRIPE_PORTAL_CONFIGURATION_ID)
+    throw new Error("billing_not_configured")
   return { ...config, livemode: config.STRIPE_MODE === "live" }
 }

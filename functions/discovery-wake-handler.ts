@@ -59,7 +59,9 @@ async function readBoundedBody(request: Request): Promise<unknown> {
 
 export function createDiscoveryWakeHandler(
   getWorker: () => DiscoveryWakeWorker,
-  getSecret: () => string | undefined = () => process.env.DISCOVERY_WAKE_SECRET
+  getSecret: () => string | undefined = () => process.env.DISCOVERY_WAKE_SECRET,
+  getPreviousSecret: () => string | undefined = () =>
+    process.env.DISCOVERY_WAKE_PREVIOUS_SECRET
 ) {
   return async (request: Request) => {
     if (new URL(request.url).pathname !== "/wake")
@@ -78,7 +80,10 @@ export function createDiscoveryWakeHandler(
     const candidate = authorization?.startsWith("Bearer ")
       ? authorization.slice("Bearer ".length)
       : ""
-    if (!candidate || !matchesSecret(candidate, expected))
+    const previous = getPreviousSecret()
+    const matchesPrevious =
+      previous && previous.length >= 32 && matchesSecret(candidate, previous)
+    if (!candidate || !(matchesSecret(candidate, expected) || matchesPrevious))
       return Response.json({ error: "unauthorized" }, { status: 401 })
 
     let input: DiscoveryWakeInput

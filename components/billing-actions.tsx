@@ -1,5 +1,6 @@
 "use client"
 import { useState } from "react"
+import { productEvent } from "@/lib/analytics/client"
 import { Button } from "@/components/ui/button"
 import { FieldGroup, FieldError } from "@/components/ui/field"
 const messages: Record<string, string> = {
@@ -38,6 +39,7 @@ export function BillingActions({
         !["checkout.stripe.com", "billing.stripe.com"].includes(url.hostname)
       )
         throw new Error("Unable to open billing.")
+      if (action === "checkout") productEvent("checkout_started")
       window.location.assign(url.href)
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to open billing.")

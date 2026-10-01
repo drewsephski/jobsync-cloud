@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { resetSearchMetric } from "@/lib/analytics/client"
 import { ArrowRight, Plus, Trash2 } from "@/components/ui/animated-icons"
 import type { OnboardingState } from "@/lib/domain/onboarding/service"
 import { preferencesSchema } from "@/lib/domain/onboarding/schema"
@@ -109,6 +110,7 @@ export function TargetPreferences({
     setError(null)
     setNotice("")
     try {
+      if (complete) resetSearchMetric()
       const next = await onboardingRequest("preferences", input)
       if (complete) {
         router.replace("/dashboard/discover")

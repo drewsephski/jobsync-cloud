@@ -1,6 +1,7 @@
 "use client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
+import { productEventOnce } from "@/lib/analytics/client"
 import { LinkButton } from "@/components/ui/link-button"
 import { authClient } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
@@ -50,8 +51,8 @@ export function AuthEmailFlow({
       setSent(true)
       setMessage(
         verifying
-          ? "Check your email for the verification code."
-          : "If an account exists for this email, a reset code has been sent."
+          ? "Check your inbox and spam folder for the verification code."
+          : "If an account exists for this email, a reset code has been sent. Check your inbox and spam folder."
       )
     } catch {
       setError("Could not send a code. Please wait a moment and try again.")
@@ -73,6 +74,7 @@ export function AuthEmailFlow({
           "Invalid or expired code. Request a new code and try again."
         )
       if (verifying) {
+        productEventOnce("email_verified")
         router.push("/onboarding")
         router.refresh()
       } else {
@@ -95,8 +97,8 @@ export function AuthEmailFlow({
         </CardTitle>
         <CardDescription>
           {verifying
-            ? "Start your 14-day trial with a verified email address."
-            : "We’ll send a reset code to your account’s email address."}
+            ? "Start your 14-day trial with a verified email address. Check your inbox and spam folder for the code."
+            : "We’ll send a reset code to your account’s email address. Check your inbox and spam folder."}
         </CardDescription>
       </CardHeader>
       <CardContent>

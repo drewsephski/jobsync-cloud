@@ -84,6 +84,19 @@ model UserProfile {
   applications Application[]
   billingCustomers BillingCustomer[]
   discoveryAllowances DiscoveryAllowance[]
+  feedback ProductFeedback[]
+}
+
+model ProductFeedback {
+  id String @id @default(uuid()) @db.Uuid
+  ownerUserId String
+  submissionKey String @db.Uuid
+  category String @db.VarChar(32)
+  message String @db.VarChar(2000)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  @@unique([ownerUserId, submissionKey])
+  @@index([ownerUserId, createdAt])
 }
 
 model Resume {

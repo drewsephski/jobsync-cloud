@@ -163,3 +163,31 @@ test("server wake failures are sanitized and return for scheduled recovery", asy
     )
   )
 })
+
+test("coordinated wake rotation accepts both keys only while the previous binding exists", async () => {
+  const previous = "previous-production-secret-with-at-least-32-characters"
+  let overlap: string | undefined = previous
+  let calls = 0
+  const handler = createDiscoveryWakeHandler(
+    () => ({ wake: async () => (calls++, { accepted: true }) }),
+    () => secret,
+    () => overlap
+  )
+  assert.equal(
+    (await handler(request(payload, { authorization: `Bearer ${previous}` })))
+      .status,
+    200
+  )
+  assert.equal(
+    (await handler(request(payload, { authorization: `Bearer ${secret}` })))
+      .status,
+    200
+  )
+  overlap = undefined
+  assert.equal(
+    (await handler(request(payload, { authorization: `Bearer ${previous}` })))
+      .status,
+    401
+  )
+  assert.equal(calls, 2)
+})

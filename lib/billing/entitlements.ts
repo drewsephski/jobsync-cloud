@@ -105,7 +105,8 @@ export async function readEntitlement(
     where: { ownerUserId_livemode: { ownerUserId, livemode: billingMode() } },
     include: { subscriptions: true },
   })
-  if (profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
+  if (profile.deletionRequestedAt)
+    throw new UploadError("account_deleting", 403)
   return resolveEntitlement(profile, customer?.subscriptions ?? [], now)
 }
 export async function requireEntitlement(
@@ -128,8 +129,11 @@ export async function requireCoreEntitlement(
   tx: Prisma.TransactionClient,
   ownerUserId: string
 ) {
-  const profile = await tx.userProfile.findUnique({ where: { id: ownerUserId } })
-  if (!profile || profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
+  const profile = await tx.userProfile.findUnique({
+    where: { id: ownerUserId },
+  })
+  if (!profile || profile.deletionRequestedAt)
+    throw new UploadError("account_deleting", 403)
   if (billingRolloutReady() && billingMode())
     await requireEntitlement(tx, ownerUserId)
 }
@@ -144,5 +148,15 @@ export function testBillingAllowed(ownerUserId: string) {
 }
 
 export function billingCheckoutAvailable(ownerUserId: string) {
-  return billingMode() ? billingRolloutReady() : testBillingAllowed(ownerUserId)
+  if (!billingMode()) return testBillingAllowed(ownerUserId)
+  if (billingRolloutReady()) return true
+  // Only newly-created, isolated release accounts may prove live billing before
+  // rollout. This does not enable public Checkout or change core entitlements.
+  return (process.env.BILLING_LIVE_PROOF_ALLOWED_USER_IDS ?? "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter((value) =>
+      /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value)
+    )
+    .includes(ownerUserId)
 }

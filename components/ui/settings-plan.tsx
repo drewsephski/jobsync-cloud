@@ -1,4 +1,6 @@
 "use client"
+import { useEffect } from "react"
+import { productEventOnce } from "@/lib/analytics/client"
 import {
   Card,
   CardHeader,
@@ -23,6 +25,11 @@ export function SettingsPlan({
   upgrade: boolean
   checkout?: string
 }) {
+  useEffect(() => {
+    productEventOnce("upgrade_viewed")
+    // Plan comes from server entitlement state, never from a success URL.
+    if (summary.plan === "plus") productEventOnce("subscription_activated")
+  }, [summary.plan])
   const paymentProblem = [
     "past_due",
     "unpaid",
@@ -120,9 +127,10 @@ export function SettingsPlan({
             {!upgrade && summary.plan !== "plus" && (
               <Alert>
                 <AlertDescription>
-                  Plus upgrades are being prepared. Live charging is disabled.
+                  Plus subscriptions aren’t available yet. You won’t be charged.
                   Your existing tracking and resume editing remain available
-                  during rollout; trial AI and discovery limits still apply.
+                  while subscriptions are unavailable; trial AI and discovery
+                  limits still apply.
                 </AlertDescription>
               </Alert>
             )}

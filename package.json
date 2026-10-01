@@ -37,7 +37,8 @@
     "applications:browser:test": "playwright test applications.spec.ts",
     "billing:test": "node --conditions=react-server --import tsx --test tests/billing.test.ts && node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/billing-api.test.ts",
     "account:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/account.test.ts tests/account-providers.test.ts tests/account-api.test.ts",
-    "observability:test": "node --import tsx --test tests/observability.test.ts"
+    "observability:test": "node --import tsx --test tests/observability.test.ts",
+    "release:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/release-boundaries.test.ts tests/feedback-api.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",
@@ -51,6 +52,7 @@
     "@prisma/client": "7.10.0",
     "@shadcn/react": "^0.3.1",
     "@tanstack/react-table": "^9.2.4",
+    "@vercel/analytics": "^2.0.1",
     "ai": "7.0.126",
     "class-variance-authority": "^0.7.1",
     "cn": "^0.4.0",

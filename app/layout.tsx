@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { Suspense } from "react"
+import { ProductAnalytics } from "@/components/ui/product-analytics"
 
 const fontSans = Geist({
   subsets: ["latin"],
@@ -15,6 +17,9 @@ const fontMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.APP_ORIGIN ?? "https://jobsync-cloud.vercel.app"
+  ),
   title: { default: "JobSync Cloud", template: "%s | JobSync Cloud" },
   description: "Your job search workspace, already set up.",
 }
@@ -32,6 +37,9 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>{children}</ThemeProvider>
+        <Suspense>
+          <ProductAnalytics />
+        </Suspense>
       </body>
     </html>
   )

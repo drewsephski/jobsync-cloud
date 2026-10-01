@@ -17,6 +17,7 @@ export async function exportAccount(db: PrismaClient, user: CurrentAuthUser) {
         usage,
         allowances,
         customers,
+        feedback,
       ] = await Promise.all([
         tx.resume.findMany({
           where,
@@ -54,6 +55,11 @@ export async function exportAccount(db: PrismaClient, user: CurrentAuthUser) {
         tx.billingCustomer.findMany({
           where,
           include: { subscriptions: true },
+        }),
+        tx.productFeedback.findMany({
+          where,
+          select: { category: true, message: true, createdAt: true },
+          orderBy: { createdAt: "asc" },
         }),
       ])
       // Export personal content and plan history. Capability URLs, auth/session
@@ -98,6 +104,7 @@ export async function exportAccount(db: PrismaClient, user: CurrentAuthUser) {
         })),
         matches,
         savedJobStates: states,
+        feedback,
         usage: { ai: usage, discovery: allowances },
         billing: customers.map((c) => ({
           mode: c.livemode ? "live" : "test",

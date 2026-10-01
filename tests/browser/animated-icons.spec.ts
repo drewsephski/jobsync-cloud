@@ -14,12 +14,22 @@ test("icons animate from their whole parent link, button, and card", async ({
   await expect(arrow).toBeVisible()
   const path = arrow.locator("svg path").first()
   const restingPath = await path.getAttribute("d")
+  // Observe the short animation before hovering so slow browser round trips do
+  // not miss a completed 400ms keyframe.
+  await path.evaluate((element) => {
+    const initial = element.getAttribute("d")
+    const observer = new MutationObserver(() => {
+      if (element.getAttribute("d") !== initial) {
+        element.setAttribute("data-motion-observed", "true")
+        observer.disconnect()
+      }
+    })
+    observer.observe(element, { attributes: true, attributeFilter: ["d"] })
+  })
   // Hover the text edge, outside the icon's hit box.
   await link.hover({ position: { x: 12, y: 12 } })
   await expect(arrow).toHaveAttribute("data-animating", "true")
-  await expect
-    .poll(() => path.getAttribute("d"), { intervals: [20] })
-    .not.toBe(restingPath)
+  await expect(path).toHaveAttribute("data-motion-observed", "true")
   await page.mouse.move(0, 0)
   await expect(arrow).toHaveAttribute("data-animating", "false")
   await expect(path).toHaveAttribute("d", restingPath!)
