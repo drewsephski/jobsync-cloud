@@ -57,6 +57,12 @@ export default async function Dashboard() {
       </CardContent>
       <CardFooter className="flex-wrap gap-3">
         <Button
+          nativeButton={false}
+          render={<Link href="/dashboard/discover" />}
+        >
+          Discover jobs
+        </Button>
+        <Button
           variant="neutral"
           nativeButton={false}
           render={<Link href="/dashboard/resume" />}

@@ -5,7 +5,7 @@ import type {
   ProcessingRun,
 } from "../../generated/prisma/client"
 import type { AiReceipt, StructureResult } from "../../ai/openrouter"
-import { RESUME_AI_CONFIG as config } from "../../ai/config"
+import { RESUME_AI_CONFIG } from "../../ai/config"
 import { LostLeaseError } from "../processing-run/service"
 export class AllowanceError extends Error {
   constructor(public code: string) {
@@ -17,7 +17,7 @@ export async function lockLiveRun(
   run: ProcessingRun
 ) {
   const rows = await tx.$queryRaw<ProcessingRun[]>`SELECT * FROM "ProcessingRun"
-    WHERE "id" = ${run.id}::uuid AND "ownerUserId" = ${run.ownerUserId}
+    WHERE "id" = ${run.id}::uuid AND "ownerUserId" IS NOT DISTINCT FROM ${run.ownerUserId}
       AND "leaseToken" = ${run.leaseToken}::uuid AND "status" = 'running'
       AND "leaseExpiresAt" > clock_timestamp() AND "cancellationRequestedAt" IS NULL FOR UPDATE`
   if (!rows[0]) throw new LostLeaseError()
@@ -42,7 +42,17 @@ export function receiptData(receipt: AiReceipt) {
     } satisfies Prisma.InputJsonObject,
   }
 }
-export function createAiAccounting(db: PrismaClient) {
+export function createAiAccounting(
+  db: PrismaClient,
+  config = RESUME_AI_CONFIG as {
+    model: string
+    maxPaidAttempts: number
+    reservedCostMicroUsd: bigint
+    pricingVersion: string
+  },
+  feature = "resume_structure_v1",
+  policyId = "resume"
+) {
   async function reserve(run: ProcessingRun) {
     return db.$transaction(
       async (tx) => {
@@ -50,7 +60,7 @@ export function createAiAccounting(db: PrismaClient) {
         // All invocations serialize admission; no read/check/write allowance race.
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(78234102)`
         const policy = await tx.aiBudgetPolicy.findUnique({
-          where: { id: "resume" },
+          where: { id: policyId },
         })
         if (!policy?.enabled) throw new AllowanceError("ai_paused")
         const existing = await tx.aiUsageReservation.findUnique({
@@ -87,7 +97,7 @@ export function createAiAccounting(db: PrismaClient) {
         return tx.aiUsageReservation.create({
           data: {
             ownerUserId: run.ownerUserId!,
-            feature: "resume_structure_v1",
+            feature,
             provider: "openrouter",
             model: config.model,
             idempotencyKey: run.idempotencyKey,
@@ -111,9 +121,18 @@ export function createAiAccounting(db: PrismaClient) {
           where: { id: reservationId, ownerUserId: run.ownerUserId! },
         })
         const policy = await tx.aiBudgetPolicy.findUnique({
-          where: { id: "resume" },
+          where: { id: policyId },
         })
         if (!policy?.enabled) throw new AllowanceError("ai_paused")
+        if (feature === "job_match_v1") {
+          await tx.$executeRaw`SELECT pg_advisory_xact_lock(78234102)`
+          const [daily] = await tx.$queryRaw<
+            { count: bigint }[]
+          >`SELECT count(*) FROM "AiUsage" WHERE "ownerUserId"=${run.ownerUserId} AND feature=${feature}
+            AND "createdAt" >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'`
+          if (Number(daily.count) >= 3)
+            throw new AllowanceError("daily_match_limit")
+        }
         const prior = await tx.aiUsage.findMany({
           where: { reservationId },
           orderBy: { createdAt: "asc" },
@@ -142,7 +161,7 @@ export function createAiAccounting(db: PrismaClient) {
           data: {
             ownerUserId: run.ownerUserId!,
             reservationId,
-            feature: "resume_structure_v1",
+            feature,
             provider: "openrouter",
             model: config.model,
             requestId: randomUUID(),
@@ -200,7 +219,7 @@ export function createAiAccounting(db: PrismaClient) {
   async function record(
     tx: Prisma.TransactionClient,
     requestId: string,
-    result: StructureResult
+    result: Omit<StructureResult, "data"> & { data: unknown | null }
   ) {
     let usage = await tx.aiUsage.findUniqueOrThrow({ where: { requestId } })
     // Same reservation-before-usage lock order as billing reconciliation.

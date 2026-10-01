@@ -15,3 +15,13 @@ export const RESUME_AI_CONFIG = {
     max_price: { prompt: 0.2, completion: 1, request: 0 },
   },
 } as const
+
+export const MATCH_AI_CONFIG = {
+  ...RESUME_AI_CONFIG,
+  maxOutputTokens: 600,
+  maxInputBytes: 60_000,
+  timeoutMs: 30_000,
+  maxPaidAttempts: 1,
+  reservedCostMicroUsd: BigInt(15_000),
+  pricingVersion: "2026-10-01-match-luna-ceiling-v1",
+} as const

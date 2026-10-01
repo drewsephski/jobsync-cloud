@@ -3,6 +3,14 @@ import { defineConfig } from "@neon/config/v1"
 export default defineConfig({
   auth: true,
   functions: {
+    discoveryworker: {
+      name: "Shared job discovery worker",
+      source: "./functions/discovery-worker.ts",
+      env: process.env.OPENROUTER_API_KEY
+        ? { OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY }
+        : undefined,
+      dev: { port: 8788 },
+    },
     resumeworker: {
       name: "Resume processing worker",
       source: "./functions/resume-worker.ts",
@@ -14,6 +22,13 @@ export default defineConfig({
     },
   },
   triggers: {
+    "discovery-recovery": {
+      type: "schedule",
+      function: "discoveryworker",
+      cron: "*/5 * * * *",
+      functionPath: "/recover",
+      enabled: true,
+    },
     "resume-upload-created": {
       type: "storage_object_created",
       function: "resumeworker",

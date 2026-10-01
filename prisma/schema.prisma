@@ -55,6 +55,8 @@ model UserProfile {
   timezone              String?
   onboardingCompletedAt DateTime? @db.Timestamptz(3)
   preferenceRevision    Int       @default(0)
+  discoveryCursor       String?   @db.Uuid
+  discoveryInputKey     String?
   createdAt             DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
 
@@ -65,6 +67,9 @@ model UserProfile {
   processingRuns    ProcessingRun[]
   usageReservations AiUsageReservation[]
   aiUsage           AiUsage[]
+  companyWatches CompanyWatch[]
+  jobMatches JobMatch[]
+  jobStates UserJobState[]
 }
 
 model Resume {
@@ -99,6 +104,7 @@ model ResumeVersion {
   originDraft ResumeVersion? @relation("DraftEdits", fields: [ownerUserId, resumeId, originDraftId], references: [ownerUserId, resumeId, id], onDelete: Restrict, onUpdate: Restrict)
   edits ResumeVersion[] @relation("DraftEdits")
   confirmedFor Resume[] @relation("ConfirmedResume")
+  jobMatches JobMatch[]
   sourceUploadId   String?             @unique @db.Uuid
   processingRunId  String?             @unique @db.Uuid
   sourceSha256     String?             @db.VarChar(64)
@@ -279,4 +285,107 @@ model AiBudgetPolicy {
   ownerMonthlyCostMicroUsd BigInt
   globalDailyCostMicroUsd BigInt
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+// Public catalog and ingestion are service-owned, never writable through user APIs.
+enum AtsProvider {
+  greenhouse
+  lever
+  ashby
+}
+model Company {
+  id String @id @default(uuid()) @db.Uuid
+  name String
+  slug String @unique
+  boards AtsBoard[]
+}
+model AtsBoard {
+  id String @id @default(uuid()) @db.Uuid
+  companyId String @db.Uuid
+  provider AtsProvider
+  region String @default("global")
+  slug String
+  enabled Boolean @default(true)
+  lastSuccessAt DateTime? @db.Timestamptz(3)
+  nextFetchAt DateTime @default(now()) @db.Timestamptz(3)
+  errorCode String?
+  fetchCount Int @default(0)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  postings JobPosting[]
+  watches CompanyWatch[]
+  @@unique([provider, slug])
+  @@index([enabled, nextFetchAt])
+}
+model JobPosting {
+  id String @id @default(uuid()) @db.Uuid
+  boardId String @db.Uuid
+  externalId String
+  title String
+  location String
+  remote Boolean?
+  description String
+  originalUrl String
+  publishedAt DateTime? @db.Timestamptz(3)
+  contentHash String @db.VarChar(64)
+  contentVersion Int @default(1)
+  open Boolean @default(true)
+  missingCount Int @default(0)
+  firstSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  closedAt DateTime? @db.Timestamptz(3)
+  board AtsBoard @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  matches JobMatch[]
+  states UserJobState[]
+  @@unique([boardId, externalId])
+  @@index([boardId, open, firstSeenAt])
+}
+model CompanyWatch {
+  ownerUserId String
+  boardId String @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  board AtsBoard @relation(fields: [boardId], references: [id], onDelete: Restrict)
+  @@id([ownerUserId, boardId])
+  @@index([boardId])
+}
+enum DiscoveryState {
+  new
+  saved
+  dismissed
+}
+// Actions survive recomputation; each user's state is independent of public jobs.
+model UserJobState {
+  ownerUserId String
+  jobPostingId String @db.Uuid
+  state DiscoveryState @default(new)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  posting JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
+  @@id([ownerUserId, jobPostingId])
+}
+// Immutable input identity. Only AI result fields may be filled after dispatch.
+model JobMatch {
+  id String @id @default(uuid()) @db.Uuid
+  ownerUserId String
+  resumeId String @db.Uuid
+  resumeVersionId String @db.Uuid
+  preferenceRevision Int
+  preferenceHash String @db.VarChar(64)
+  jobPostingId String @db.Uuid
+  postingVersion Int
+  postingHash String @db.VarChar(64)
+  algorithmVersion String
+  inputKey String @unique
+  relevance Int
+  reasons String[]
+  aiScore Int?
+  recommendation String?
+  rationale String?
+  aiAnalyzedAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
+  resumeVersion ResumeVersion @relation(fields: [ownerUserId, resumeId, resumeVersionId], references: [ownerUserId, resumeId, id], onDelete: Restrict, onUpdate: Restrict)
+  posting JobPosting @relation(fields: [jobPostingId], references: [id], onDelete: Restrict)
+  @@unique([ownerUserId, id])
+  @@index([ownerUserId, jobPostingId, createdAt])
 }

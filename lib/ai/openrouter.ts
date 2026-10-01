@@ -57,9 +57,35 @@ export function microUsd(cost: number | undefined) {
   return BigInt(Math.ceil(cost * 1e6))
 }
 export function createResumeStructurer(apiKey: string): ResumeStructurer {
+  const generate = createStructuredGenerator(
+    apiKey,
+    config,
+    resumeSchema,
+    RESUME_SYSTEM_PROMPT,
+    (value, text) => validateGroundedResume(value, JSON.parse(text).resumeText)
+  )
+  return (text, onReceipt) =>
+    generate(JSON.stringify({ resumeText: text }), onReceipt)
+}
+export function createStructuredGenerator<T>(
+  apiKey: string,
+  settings: {
+    model: string
+    routing: typeof config.routing
+    maxOutputTokens: number
+    timeoutMs: number
+  },
+  schema: z.ZodType<T>,
+  system: string,
+  validate: (value: T, text: string) => T = (value) => value
+) {
+  const config = settings
   if (!apiKey) throw new Error("missing_openrouter_key")
   const router = createOpenRouter({ apiKey })
-  return async (text, onReceipt) => {
+  return async (
+    text: string,
+    onReceipt?: (receipt: AiReceipt) => Promise<void>
+  ) => {
     const started = Date.now()
     let receipt: AiReceipt | null = null
     try {
@@ -69,9 +95,9 @@ export function createResumeStructurer(apiKey: string): ResumeStructurer {
           usage: { include: true },
           structuredOutputs: { strict: true },
         }),
-        output: Output.object({ name: "resume_draft", schema: resumeSchema }),
-        system: RESUME_SYSTEM_PROMPT,
-        prompt: JSON.stringify({ resumeText: text }),
+        output: Output.object({ name: "resume_draft", schema }),
+        system,
+        prompt: text,
         maxOutputTokens: config.maxOutputTokens,
         maxRetries: 0,
         timeout: { totalMs: config.timeoutMs },
@@ -102,7 +128,7 @@ export function createResumeStructurer(apiKey: string): ResumeStructurer {
           await onReceipt?.(receipt)
         },
       })
-      const data = validateGroundedResume(result.output, text)
+      const data = validate(result.output, text)
       return {
         data,
         receipt,

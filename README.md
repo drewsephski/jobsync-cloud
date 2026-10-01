@@ -419,3 +419,25 @@ explicit confirmation before target preferences can complete account setup.
 
 See [the onboarding handoff](docs/RESUME_ONBOARDING_HANDOFF.md) for state transitions,
 concurrency, parser choices, deployment, and verification.
+
+## Shared job discovery
+
+`/dashboard/discover` lets onboarded users watch supported ATS companies and
+organize personalized results. Public jobs are shared; preferences, matches and
+actions are private. See [discovery handoff](docs/DISCOVERY_HANDOFF.md) and
+[provider/upstream research](docs/DISCOVERY_RESEARCH.md) for bounds, ownership,
+versioning, costs and proof limitations.
+
+```bash
+pnpm db:deploy
+pnpm discovery:seed
+pnpm discovery:test
+pnpm test
+neon deploy --env .env.local --no-env-pull
+JOBSYNC_DISCOVERY_LIVE_BRANCH=lively-shape-65452824/br-tiny-tree-b44fo1lv pnpm discovery:live-proof
+```
+
+`discoveryworker` runs every five minutes from Neon. It refreshes only watched
+public boards at six-hour intervals and bounds private GPT-6 Luna matching to
+three calls per user per UTC day, with durable allowance/cost accounting.
+The OpenRouter key stays in the Function environment and is not needed by Vercel.

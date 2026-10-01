@@ -26,10 +26,13 @@
     "worker:test": "node --import tsx --test --test-concurrency=1 tests/processing-run.test.ts tests/trigger-handler.test.ts tests/resume-worker.test.ts tests/download-object.test.ts tests/runtime-boundary.test.ts",
     "ai:test": "node --import tsx --test --test-concurrency=1 tests/extraction.test.ts tests/ai-boundary.test.ts tests/ai-accounting.test.ts",
     "onboarding:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/onboarding.test.ts tests/onboarding-api.test.ts",
-    "test": "pnpm db:test && pnpm auth:test && pnpm storage:test && pnpm validation:test && pnpm worker:test && pnpm ai:test && pnpm onboarding:test",
+    "test": "pnpm db:test && pnpm auth:test && pnpm storage:test && pnpm validation:test && pnpm worker:test && pnpm ai:test && pnpm onboarding:test && pnpm discovery:test",
     "ai:live-proof": "node --import tsx scripts/ai-live-proof.ts",
     "onboarding:browser:test": "playwright test --grep @fixture",
-    "onboarding:live-proof": "playwright test --grep @live"
+    "onboarding:live-proof": "playwright test --grep @live",
+    "discovery:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/discovery-providers.test.ts tests/discovery-api.test.ts tests/discovery.test.ts",
+    "discovery:seed": "node --import tsx scripts/seed-discovery.ts",
+    "discovery:live-proof": "node --conditions=react-server --import tsx scripts/discovery-live-proof.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",

@@ -52,3 +52,6 @@ next-env.d.ts
 /output/playwright/
 /test-results/
 /playwright-report/
+
+/output/discovery-live-proof.json
+/output/discovery-browser-proof.json
