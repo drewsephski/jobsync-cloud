@@ -1,5 +1,7 @@
+import { privateRead } from "@/lib/backend/private-read"
 import "server-only"
 
+import { db } from "@/lib/db"
 import { cache } from "react"
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth/server"
@@ -16,6 +18,12 @@ export const getCurrentAuthUser = cache(context.getCurrentAuthUser)
 export const requireCurrentAuthUser = cache(context.requireCurrentAuthUser)
 export const requireCurrentProfile = cache(async () => {
   const user = await requireCurrentAuthUser()
+  if (
+    await privateRead(() =>
+      db.accountDeletionRequest.findUnique({ where: { ownerUserId: user.id } })
+    )
+  )
+    redirect("/account-closed")
   const profile = await ensureUserProfile(user)
   return { user, profile }
 })

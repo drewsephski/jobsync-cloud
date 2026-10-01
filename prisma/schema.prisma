@@ -48,6 +48,13 @@ enum AiUsageStatus {
   reconciliation_required
 }
 
+enum AccountDeletionStatus {
+  completed
+  pending
+  running
+  retry_wait
+}
+
 // Application-owned identity only; no dependency on Neon's managed auth schema.
 model UserProfile {
   id                    String    @id
@@ -60,6 +67,7 @@ model UserProfile {
   trialStartedAt        DateTime? @db.Timestamptz(3)
   trialEndsAt           DateTime? @db.Timestamptz(3)
   discoveryInputKey     String?
+  deletionRequestedAt   DateTime? @db.Timestamptz(3)
   createdAt             DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
 
@@ -519,4 +527,32 @@ model DiscoveryAllowance {
   lastScannedAt DateTime @default(now()) @db.Timestamptz(3)
   owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Restrict)
   @@id([ownerUserId, periodStart])
+}
+
+// Durable, retryable teardown ledger. Deliberately has no FK to UserProfile so
+// cleanup can finish after the profile and Neon Auth identity are removed.
+model AccountDeletionRequest {
+  ownerUserId    String   @id
+  requestedAt    DateTime @default(now()) @db.Timestamptz(3)
+  completedAt    DateTime? @db.Timestamptz(3)
+  status         AccountDeletionStatus @default(pending)
+  attempt        Int      @default(0)
+  availableAt    DateTime @default(now()) @db.Timestamptz(3)
+  leaseToken     String?  @db.Uuid
+  leaseExpiresAt DateTime? @db.Timestamptz(3)
+  errorCode      String?
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([status, availableAt, requestedAt])
+  @@index([status, leaseExpiresAt])
+}
+
+// Content-free budget evidence survives private-data deletion. Unknown provider
+// costs retain their conservative reservation so deleting an account cannot
+// evade the global spend safeguard. No account, prompt, or resume identifiers.
+model DeletedAccountAiBudget {
+  id String @id @default(uuid()) @db.Uuid
+  incurredAt DateTime @db.Timestamptz(3)
+  reservedCostMicroUsd BigInt
+  finalCostMicroUsd BigInt?
 }

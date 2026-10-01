@@ -195,7 +195,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
       )}
       <FieldGroup className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <FieldGroup className="min-w-0 gap-5">
-          <Item className="border-slate-200 bg-white">
+          <Item className="border-border bg-secondary-background">
             <ItemContent className="min-w-0">
               <ItemTitle>Your search direction</ItemTitle>
               <ItemDescription className="line-clamp-none">
@@ -245,7 +245,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
             </Button>
           </FieldGroup>
           {data.jobs.length === 0 ? (
-            <Empty className="min-h-80 border-slate-200 bg-white">
+            <Empty className="min-h-80 border-border bg-secondary-background">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <Search />
@@ -273,7 +273,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               <Card key={job.id} className="gap-4 overflow-hidden">
                 <CardHeader className="gap-2">
                   <FieldGroup className="flex-row flex-wrap items-center justify-between gap-2">
-                    <CardDescription className="font-medium text-slate-600">
+                    <CardDescription className="font-medium text-foreground">
                       {job.company}
                     </CardDescription>
                     <Badge variant="neutral" className="text-xs">
@@ -312,14 +312,14 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                     </Alert>
                   )}
                   {job.aiScore === null && (
-                    <CardDescription className="text-xs text-slate-500">
+                    <CardDescription className="text-xs text-foreground">
                       {job.stale
                         ? "Your resume, preferences or this posting changed. The previous AI score is hidden while relevance is recomputed."
                         : "Selected using your target titles and resume keywords. No completed AI analysis yet."}
                     </CardDescription>
                   )}
                 </CardContent>
-                <CardFooter className="flex-wrap justify-between gap-3 border-t border-slate-100 pt-4">
+                <CardFooter className="flex-wrap justify-between gap-3 border-t border-border pt-4">
                   <Button
                     variant="neutral"
                     nativeButton={false}
@@ -417,7 +417,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                   Watching · {data.watches.length}
                 </CardDescription>
                 {data.watches.map((company) => (
-                  <Item key={company.id} size="sm" className="border-slate-100">
+                  <Item key={company.id} size="sm" className="border-border">
                     <ItemContent className="min-w-0">
                       <ItemTitle className="break-words whitespace-normal">
                         {company.company}
@@ -464,7 +464,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
               aria-label="Company directory"
             >
               {data.companies.map((company) => (
-                <Item key={company.id} size="sm" className="border-slate-100">
+                <Item key={company.id} size="sm" className="border-border">
                   <ItemContent className="min-w-0">
                     <ItemTitle className="line-clamp-none break-words">
                       {company.company}
@@ -496,7 +496,7 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                 </CardDescription>
               )}
             </ItemGroup>
-            <CardDescription className="text-xs text-slate-500">
+            <CardDescription className="text-xs text-foreground">
               Directory entries may move or retire. A board outage preserves
               your existing results.
             </CardDescription>

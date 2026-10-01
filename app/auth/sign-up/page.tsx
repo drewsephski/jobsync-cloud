@@ -25,7 +25,9 @@ export default function SignUpForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Create new account</CardTitle>
+        <CardTitle role="heading" aria-level={1}>
+          Create your workspace
+        </CardTitle>
         <CardDescription>
           Start a 14-day trial after verifying your email. No card required.
         </CardDescription>
@@ -41,7 +43,7 @@ export default function SignUpForm() {
                 type="text"
                 autoComplete="name"
                 required
-                placeholder="John Doe"
+                placeholder="Your name"
               />
             </Field>
 

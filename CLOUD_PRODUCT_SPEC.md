@@ -1,7 +1,7 @@
 # JobSync Cloud product specification
 
-Status: implementation contract; application and infrastructure changes have not begun.
-Date: September 30, 2026.
+Status: product/architecture reference for the implemented JobSync Cloud application.
+Date: October 1, 2026.
 
 ## 1. Product and scope
 
@@ -39,10 +39,10 @@ V1 excludes teams, recruiter CRM, autonomous applications/outreach, user-supplie
 | Asynchronous processing | Neon Functions |
 | Scheduling and upload events | Native Neon Function Triggers |
 | Durable orchestration | Postgres run records, leases, checkpoints, recovery sweeps |
-| AI | Neon AI Gateway primary; OpenRouter adapter/fallback |
+| AI | Vercel AI SDK with official OpenRouter provider; centralized bounded model configuration |
 | Billing | Stripe Checkout, Portal, verified webhooks |
 | Product email | Resend; verify managed-auth email configuration separately |
-| Monitoring | Sentry plus structured application/run logs |
+| Monitoring | Sanitized Next.js request-error events in Vercel runtime logs; structured worker/run logs |
 
 Do not move every action into Functions. Put shared business logic in framework-independent domain modules, with thin Next.js and Function handlers. Retain working AI SDK integrations; introduce only the provider boundary needed for generation, streaming, structured output, usage, and error normalization.
 
@@ -139,7 +139,7 @@ An external queue/workflow engine is justified only by measured recovery latency
 
 ## 8. AI policy, usage, and cost
 
-Neon AI Gateway is the intended default, subject to passing the actual JobSync workflow evaluations. OpenRouter is an explicit adapter/fallback with dedicated production credentials and spend caps. Personal development credentials never serve production. Preview AI uses separate budgets and synthetic data.
+Production AI uses the Vercel AI SDK with the official OpenRouter provider and a server-owned OpenRouter credential. The central configuration pins the model, Azure-only routing, mandatory ZDR, denied data collection, no provider fallback, and bounded output/time/cost. Resume structuring and discovery matching use durable allowance and cost accounting. Personal development credentials never serve production. Preview AI uses separate budgets and synthetic data.
 
 Provider configuration is server-owned and versioned: feature → model/provider allowlist → token/tool limits → pricing version → data policy. A fallback must satisfy the same quality, privacy, and cost constraints; never silently route to an unapproved provider.
 
@@ -174,7 +174,7 @@ Do not add annual plans or prepaid top-ups to v1 unless needed after usage data.
 
 ## 10. Privacy and environments
 
-Send only the resume/job content required for a feature. Omit contact details from scoring/review prompts when unnecessary. Never log raw resumes, prompts, responses, credentials, signed URLs, or sensitive tool arguments in default telemetry. Disable content capture and configure Sentry scrubbing.
+Send only the resume/job content required for a feature. Omit contact details from matching when unnecessary. Never log raw resumes, prompts, responses, credentials, signed URLs, or sensitive tool arguments in default telemetry. Next.js request errors currently emit only a generated event ID, route template, route type, router kind, and runtime to Vercel logs; no third-party error monitor is configured. Preserve this content-free policy if an external monitor is adopted, and verify scrubbing with synthetic canaries before enabling it.
 
 Review retention/training policies for every approved provider, including Gateway models and OpenRouter routes. Publish a claim only after verifying that the configured services satisfy it. Do not claim universal zero retention or no provider training merely because the app itself does not train models.
 

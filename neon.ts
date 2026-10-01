@@ -3,6 +3,24 @@ import { defineConfig } from "@neon/config/v1"
 export default defineConfig({
   auth: true,
   functions: {
+    accountworker: {
+      name: "Private account cleanup worker",
+      source: "./functions/account-worker.ts",
+      env: Object.fromEntries(
+        [
+          "STRIPE_MODE",
+          "STRIPE_SECRET_KEY",
+          "STRIPE_LIVE_CLEANUP_SECRET_KEY",
+          "STRIPE_TEST_CLEANUP_SECRET_KEY",
+          "NEON_ACCOUNT_CLEANUP_API_KEY",
+          "NEON_ACCOUNT_CLEANUP_PROJECT_ID",
+          "NEON_ACCOUNT_CLEANUP_BRANCH_ID",
+        ]
+          .filter((key) => process.env[key])
+          .map((key) => [key, process.env[key]!])
+      ),
+      dev: { port: 8789 },
+    },
     discoveryworker: {
       name: "Shared job discovery worker",
       source: "./functions/discovery-worker.ts",
@@ -28,6 +46,13 @@ export default defineConfig({
     },
   },
   triggers: {
+    "account-cleanup-recovery": {
+      type: "schedule",
+      function: "accountworker",
+      cron: "*/5 * * * *",
+      functionPath: "/recover",
+      enabled: true,
+    },
     "discovery-recovery": {
       type: "schedule",
       function: "discoveryworker",

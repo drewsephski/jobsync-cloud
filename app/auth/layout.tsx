@@ -1,23 +1,35 @@
 import Link from "next/link"
-import { Button } from "@/components/ui/button"
-
+import { FieldGroup } from "@/components/ui/field"
+import { CardDescription } from "@/components/ui/card"
+import { LinkButton } from "@/components/ui/link-button"
+import { ThemeToggle } from "@/components/ui/theme-toggle"
 export default function AuthLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <main className="grid min-h-svh grid-cols-[min(100%,24rem)] place-content-center p-6">
-      <div className="w-full max-w-sm space-y-6">
-        <Button
-          variant="neutral"
-          nativeButton={false}
-          render={<Link href="/" />}
-        >
-          Back to JobSync Cloud
-        </Button>
+    <main className="mx-auto flex min-h-svh max-w-md flex-col justify-center px-5 py-10">
+      <FieldGroup className="gap-7">
+        <FieldGroup className="flex-row items-center justify-between gap-4">
+          <LinkButton href="/" variant="neutral" size="sm">
+            JobSync Cloud
+          </LinkButton>
+          <ThemeToggle />
+        </FieldGroup>
         {children}
-      </div>
+        <CardDescription className="text-center text-xs">
+          By continuing, you agree to our{" "}
+          <Link href="/terms" className="underline underline-offset-4">
+            Terms
+          </Link>{" "}
+          and acknowledge our{" "}
+          <Link href="/privacy" className="underline underline-offset-4">
+            Privacy notice
+          </Link>
+          .
+        </CardDescription>
+      </FieldGroup>
     </main>
   )
 }

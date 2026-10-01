@@ -350,7 +350,7 @@ export function ApplicationDetail({
           {a.events.map((event) => (
             <Item
               key={event.id}
-              className="rounded-none border-0 border-l-2 border-slate-200 py-3 pl-5"
+              className="rounded-none border-0 border-l-2 border-border py-3 pl-5"
             >
               <ItemContent>
                 <ItemTitle className="text-sm">
@@ -391,7 +391,7 @@ export function ApplicationDetail({
         </Card>
       )}
       {!editing && !movement && (
-        <FieldGroup className="gap-3 border-t border-slate-100 pt-4">
+        <FieldGroup className="gap-3 border-t border-border pt-4">
           {confirm ? (
             <Alert>
               <AlertDescription>

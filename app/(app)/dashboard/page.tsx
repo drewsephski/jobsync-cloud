@@ -1,3 +1,6 @@
+import { privateRead } from "@/lib/backend/private-read"
+import { createOnboardingService } from "@/lib/domain/onboarding/service"
+import { billingSummary } from "@/lib/billing/service"
 import { redirect } from "next/navigation"
 import Link from "next/link"
 import { ArrowUpRight, ArrowRight, Clock, Plus, Search } from "lucide-react"
@@ -31,10 +34,12 @@ import { Badge } from "@/components/ui/badge"
 export default async function Dashboard() {
   const { user, profile } = await requireCurrentProfile()
   if (!profile.onboardingCompletedAt) redirect("/onboarding")
-  const [data, discover] = await Promise.all([
+  const [data, discover, resume, usage] = await privateRead(() => Promise.all([
     createApplicationService(db).dashboard(user),
     createDiscoveryService(db).read(user),
-  ])
+    createOnboardingService(db).read(user),
+    billingSummary(db, user.id),
+  ]))
   const opportunities = discover.jobs
     .filter((job) => !job.applicationId)
     .slice(0, 3)
@@ -46,7 +51,7 @@ export default async function Dashboard() {
         ? data.upcoming
         : data.attention
   return (
-    <FieldGroup className="onboarding-surface discovery-surface gap-7 py-6 sm:px-4">
+    <FieldGroup className="discovery-surface gap-7 py-6 sm:px-4">
       <FieldGroup className="flex-row flex-wrap items-start justify-between gap-4">
         <FieldGroup className="min-w-0 flex-1 basis-full gap-2 sm:basis-0">
           <CardDescription className="text-xs tracking-widest uppercase">
@@ -68,22 +73,7 @@ export default async function Dashboard() {
           Your applications <ArrowRight />
         </Button>
       </FieldGroup>
-      <FieldGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          ["Active applications", data.activeCount],
-          ["Applied", data.appliedCount],
-          ["In interviews", data.interviewCount],
-          ["Offers", data.offerCount],
-        ].map(([label, value]) => (
-          <Card key={label}>
-            <CardContent className="pt-5">
-              <CardDescription className="text-xs">{label}</CardDescription>
-              <CardTitle className="mt-2 text-3xl">{value}</CardTitle>
-            </CardContent>
-          </Card>
-        ))}
-      </FieldGroup>
-      <Card className="border-cyan-200!">
+      <Card className="border-border">
         <CardHeader>
           <FieldGroup className="flex-row flex-wrap items-center justify-between gap-2">
             <CardTitle role="heading" aria-level={2} className="text-xl">
@@ -138,6 +128,106 @@ export default async function Dashboard() {
           )}
         </CardContent>
       </Card>
+      <FieldGroup className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          ["Active applications", data.activeCount],
+          ["Applied", data.appliedCount],
+          ["In interviews", data.interviewCount],
+          ["Offers", data.offerCount],
+        ].map(([label, value]) => (
+          <Card key={label}>
+            <CardContent className="pt-5">
+              <CardDescription className="text-xs">{label}</CardDescription>
+              <CardTitle className="mt-2 text-3xl">{value}</CardTitle>
+            </CardContent>
+          </Card>
+        ))}
+      </FieldGroup>
+      <Card>
+        <CardHeader>
+          <CardTitle role="heading" aria-level={2}>
+            Your workspace, ready for the next step
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ItemGroup className="gap-3">
+            <Item>
+              <ItemContent>
+                <ItemTitle>
+                  {resume.version?.confirmed
+                    ? `Resume confirmed · version ${resume.version.version}`
+                    : "Review your latest resume draft"}
+                </ItemTitle>
+                <ItemDescription>
+                  {resume.version?.confirmed
+                    ? "Your confirmed resume informs new matches."
+                    : "Confirm your latest saved version so matching uses the right experience."}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="neutral"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href="/dashboard/resume" />}
+                >
+                  Review resume
+                </Button>
+              </ItemActions>
+            </Item>
+            <Item>
+              <ItemContent>
+                <ItemTitle>
+                  {discover.watches.length
+                    ? `${discover.watches.length} company boards watched`
+                    : "Choose your first company"}
+                </ItemTitle>
+                <ItemDescription>
+                  {discover.watches.length
+                    ? `${discover.counts.new} new matches. Background scans follow your target roles and confirmed resume.`
+                    : "Watch a company in Discover to start receiving relevant openings."}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="neutral"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href="/dashboard/discover" />}
+                >
+                  Discover
+                </Button>
+              </ItemActions>
+            </Item>
+            <Item>
+              <ItemContent>
+                <ItemTitle>
+                  {usage.plan === "plus"
+                    ? "JobSync Plus"
+                    : usage.plan === "trial"
+                      ? "Trial allowances"
+                      : "Review your plan"}
+                </ItemTitle>
+                <ItemDescription>
+                  {usage.limits
+                    ? `${Math.max(0, usage.limits.resumeRuns - usage.resumeRunsUsed)} resume AI runs and ${Math.max(0, usage.limits.jobAnalyses - usage.jobAnalysesUsed)} job analyses remaining this period.`
+                    : "Plan details and account controls live together in Settings."}
+                </ItemDescription>
+              </ItemContent>
+              <ItemActions>
+                <Button
+                  variant="neutral"
+                  size="sm"
+                  nativeButton={false}
+                  render={<Link href="/dashboard/settings?tab=plan" />}
+                >
+                  Usage
+                </Button>
+              </ItemActions>
+            </Item>
+          </ItemGroup>
+        </CardContent>
+      </Card>
       <FieldGroup className="grid items-start gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
@@ -151,7 +241,7 @@ export default async function Dashboard() {
           <CardContent>
             <ItemGroup className="gap-2">
               {opportunities.map((job) => (
-                <Item key={job.id} className="border-slate-100">
+                <Item key={job.id} className="border-border">
                   <ItemContent className="min-w-0">
                     <ItemTitle className="break-words whitespace-normal">
                       {job.title}
@@ -194,7 +284,7 @@ export default async function Dashboard() {
               {data.recent.map((event) => (
                 <Item
                   key={event.id}
-                  className="border-0 border-b border-slate-100 px-0"
+                  className="border-0 border-b border-border px-0"
                 >
                   <ItemContent>
                     <ItemTitle className="text-sm">
@@ -239,7 +329,7 @@ export default async function Dashboard() {
           </CardContent>
         </Card>
       </FieldGroup>
-      <FieldGroup className="flex-row flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+      <FieldGroup className="flex-row flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
         <Button
           variant="neutral"
           nativeButton={false}
@@ -264,7 +354,7 @@ function NextApplication({
   today: string
 }) {
   return (
-    <Item className="border-slate-100">
+    <Item className="border-border">
       <ItemContent className="min-w-0">
         <ItemTitle className="break-words whitespace-normal">
           {a.nextAction ||
@@ -281,7 +371,7 @@ function NextApplication({
         </ItemDescription>
         {a.followUpOn && (
           <CardDescription
-            className={`flex items-center gap-1 text-xs ${a.followUpOn < today ? "text-amber-800" : ""}`}
+            className={`flex items-center gap-1 text-xs ${a.followUpOn < today ? "text-foreground" : ""}`}
           >
             <Clock className="size-3" />
             {a.followUpOn < today ? "Overdue · " : ""}

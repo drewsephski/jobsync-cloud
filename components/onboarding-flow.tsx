@@ -6,6 +6,7 @@ import type { OnboardingState } from "@/lib/domain/onboarding/service"
 import { ResumeUpload } from "./resume-upload"
 import { ResumeEditor } from "./resume-editor"
 import { TargetPreferences } from "./target-preferences"
+import { StepTransition } from "@/components/ui/step-transition"
 import { FieldGroup } from "@/components/ui/field"
 import {
   Card,
@@ -62,7 +63,7 @@ export function OnboardingFlow({
                   key={label}
                   role="listitem"
                   aria-current={active === index ? "step" : undefined}
-                  className={`flex-row items-center gap-2 text-xs sm:text-sm ${index <= active ? "text-slate-900" : "text-slate-400"}`}
+                  className={`flex-row items-center gap-2 text-xs sm:text-sm ${index <= active ? "text-foreground" : "text-foreground/60"}`}
                 >
                   <Badge
                     variant="neutral"
@@ -82,7 +83,7 @@ export function OnboardingFlow({
         </FieldGroup>
       )}
       <FieldGroup className="gap-3">
-        <CardDescription className="text-xs font-semibold tracking-[0.16em] text-slate-500 uppercase">
+        <CardDescription className="text-xs font-semibold tracking-[0.16em] text-foreground uppercase">
           {resumeOnly
             ? "Your resume"
             : `Account setup · Step ${active + 1} of 3`}
@@ -102,7 +103,7 @@ export function OnboardingFlow({
                 ? "Your resume is taking shape."
                 : "Start with your experience."}
         </CardTitle>
-        <CardDescription className="max-w-2xl text-base leading-relaxed text-slate-500">
+        <CardDescription className="max-w-2xl text-base leading-relaxed text-foreground">
           {preferenceStep
             ? "A few preferences will give your job search a clear starting point."
             : reviewing
@@ -110,70 +111,72 @@ export function OnboardingFlow({
               : "Upload your resume once. We’ll turn it into an editable draft, and you’ll have the final say on every detail."}
         </CardDescription>
       </FieldGroup>
-      <Card className="workspace-card">
-        <CardHeader>
-          <CardTitle role="heading" aria-level={2}>
-            {preferenceStep
-              ? "Search preferences"
-              : reviewing
-                ? "Review your resume"
-                : "Resume document"}
-          </CardTitle>
-          {!reviewing && !preferenceStep && (
-            <CardDescription>
-              Your progress is saved to your account. You can leave and pick up
-              here later.
-            </CardDescription>
-          )}
-        </CardHeader>
-        <CardContent>
-          {state.step === "preferences" && !resumeOnly && (
-            <FieldGroup
-              hidden={!preferenceStep}
-              className={preferenceStep ? "" : "hidden"}
-            >
-              <TargetPreferences
-                initialState={state}
-                onSaved={setState}
-                onReview={() => setReviewAgain(true)}
-              />
-            </FieldGroup>
-          )}
-          {!preferenceStep &&
-            (reviewing ? (
-              <ResumeEditor
-                key={state.version!.id}
-                initialState={state}
-                onConfirmed={
-                  resumeOnly
-                    ? undefined
-                    : (next) => {
-                        setState(next)
-                        setReviewAgain(false)
-                        window.scrollTo({ top: 0, behavior: "instant" })
-                      }
-                }
-              />
-            ) : (
-              <FieldGroup className="gap-6">
-                <FieldGroup className="upload-intro flex-row items-center gap-4">
-                  <FileText className="size-10 shrink-0 text-slate-400" />
-                  <FieldGroup className="gap-1">
-                    <CardTitle>
-                      {state.upload?.fileName ??
-                        "A PDF or Word resume is all you need"}
-                    </CardTitle>
-                    <CardDescription>
-                      Text-based PDF or DOCX · up to 5 MiB · private storage
-                    </CardDescription>
-                  </FieldGroup>
-                </FieldGroup>
-                <ResumeUpload initialUploadId={state.upload?.id} />
+      <StepTransition step={active}>
+        <Card className="workspace-card">
+          <CardHeader>
+            <CardTitle role="heading" aria-level={2}>
+              {preferenceStep
+                ? "Search preferences"
+                : reviewing
+                  ? "Review your resume"
+                  : "Resume document"}
+            </CardTitle>
+            {!reviewing && !preferenceStep && (
+              <CardDescription>
+                Your progress is saved to your account. You can leave and pick
+                up here later.
+              </CardDescription>
+            )}
+          </CardHeader>
+          <CardContent>
+            {state.step === "preferences" && !resumeOnly && (
+              <FieldGroup
+                hidden={!preferenceStep}
+                className={preferenceStep ? "" : "hidden"}
+              >
+                <TargetPreferences
+                  initialState={state}
+                  onSaved={setState}
+                  onReview={() => setReviewAgain(true)}
+                />
               </FieldGroup>
-            ))}
-        </CardContent>
-      </Card>
-      <CardDescription className="text-center text-xs leading-relaxed text-slate-500">
+            )}
+            {!preferenceStep &&
+              (reviewing ? (
+                <ResumeEditor
+                  key={state.version!.id}
+                  initialState={state}
+                  onConfirmed={
+                    resumeOnly
+                      ? undefined
+                      : (next) => {
+                          setState(next)
+                          setReviewAgain(false)
+                          window.scrollTo({ top: 0, behavior: "instant" })
+                        }
+                  }
+                />
+              ) : (
+                <FieldGroup className="gap-6">
+                  <FieldGroup className="upload-intro flex-row items-center gap-4">
+                    <FileText className="size-10 shrink-0 text-foreground" />
+                    <FieldGroup className="gap-1">
+                      <CardTitle>
+                        {state.upload?.fileName ??
+                          "A PDF or Word resume is all you need"}
+                      </CardTitle>
+                      <CardDescription>
+                        Text-based PDF or DOCX · up to 5 MiB · private storage
+                      </CardDescription>
+                    </FieldGroup>
+                  </FieldGroup>
+                  <ResumeUpload initialUploadId={state.upload?.id} />
+                </FieldGroup>
+              ))}
+          </CardContent>
+        </Card>
+      </StepTransition>
+      <CardDescription className="text-center text-xs leading-relaxed text-foreground">
         Your original file and AI draft stay intact. Only a version you
         explicitly confirm is accepted as your resume.
       </CardDescription>

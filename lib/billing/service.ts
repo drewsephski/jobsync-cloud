@@ -123,6 +123,7 @@ export function createBillingService(
       const profile = await tx.userProfile.findUniqueOrThrow({
         where: { id: user.id },
       })
+      if (profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
       if (!profile.emailVerifiedAt || !user.emailVerified)
         throw new UploadError("email_verification_required", 403)
       await tx.billingCustomer.upsert({
@@ -142,7 +143,8 @@ export function createBillingService(
         const profile = await tx.userProfile.findUniqueOrThrow({
           where: { id: user.id },
         })
-        if (!profile.emailVerifiedAt || !user.emailVerified)
+        if (profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
+      if (!profile.emailVerifiedAt || !user.emailVerified)
           throw new UploadError("email_verification_required", 403)
         let customer = await tx.billingCustomer.findUniqueOrThrow({
           where: {
@@ -255,6 +257,8 @@ export function createBillingService(
   async function portal(user: CurrentAuthUser) {
     if (!config.livemode && !testBillingAllowed(user.id))
       throw new UploadError("test_billing_restricted", 403)
+    const profile = await db.userProfile.findUnique({ where: { id: user.id } })
+    if (!profile || profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
     const customer = await db.billingCustomer.findUnique({
       where: {
         ownerUserId_livemode: {
@@ -267,7 +271,7 @@ export function createBillingService(
       throw new UploadError("billing_customer_not_found", 404)
     const session = await stripe.billingPortal.sessions.create({
       customer: customer.stripeCustomerId,
-      return_url: `${config.APP_ORIGIN}/dashboard/billing`,
+      return_url: `${config.APP_ORIGIN}/dashboard/settings?tab=plan`,
       configuration: config.STRIPE_PORTAL_CONFIGURATION_ID,
     })
     return session.url

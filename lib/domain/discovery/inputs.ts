@@ -23,6 +23,7 @@ export async function profileInputs(
   })
   if (
     !profile?.onboardingCompletedAt ||
+    profile.deletionRequestedAt ||
     !resume?.confirmedVersion ||
     !targets.length
   )

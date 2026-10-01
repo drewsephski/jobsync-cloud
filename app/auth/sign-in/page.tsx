@@ -25,8 +25,12 @@ export default function SignInForm() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sign in</CardTitle>
-        <CardDescription>Welcome back. Enter your credentials.</CardDescription>
+        <CardTitle role="heading" aria-level={1}>
+          Sign in
+        </CardTitle>
+        <CardDescription>
+          Welcome back to your job search workspace.
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <form action={formAction}>

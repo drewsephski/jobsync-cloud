@@ -35,7 +35,9 @@
     "discovery:live-proof": "node --conditions=react-server --import tsx scripts/discovery-live-proof.ts",
     "applications:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test --test-concurrency=1 tests/applications.test.ts tests/applications-api.test.ts",
     "applications:browser:test": "playwright test applications.spec.ts",
-    "billing:test": "node --conditions=react-server --import tsx --test tests/billing.test.ts && node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/billing-api.test.ts"
+    "billing:test": "node --conditions=react-server --import tsx --test tests/billing.test.ts && node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/billing-api.test.ts",
+    "account:test": "node --experimental-test-module-mocks --conditions=react-server --import tsx --test tests/account.test.ts tests/account-providers.test.ts tests/account-api.test.ts",
+    "observability:test": "node --import tsx --test tests/observability.test.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "3.1144.0",
@@ -58,6 +60,7 @@
     "input-otp": "^1.5.0",
     "lucide-react": "^1.49.0",
     "mammoth": "1.13.0",
+    "motion": "^13.5.0",
     "next": "16.3.6",
     "next-themes": "^0.4.6",
     "radix-ui": "^1.6.7",

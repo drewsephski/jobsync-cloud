@@ -51,6 +51,8 @@ for (const suite of [
   "discovery",
   "applications",
   "billing",
+  "account",
+  "observability",
 ]) {
   const result = spawnSync("pnpm", [`${suite}:test`], {
     stdio: "inherit",

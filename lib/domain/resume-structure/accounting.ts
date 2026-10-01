@@ -22,6 +22,10 @@ export async function lockLiveRun(
       AND "leaseToken" = ${run.leaseToken}::uuid AND "status" = 'running'
       AND "leaseExpiresAt" > clock_timestamp() AND "cancellationRequestedAt" IS NULL FOR UPDATE`
   if (!rows[0]) throw new LostLeaseError()
+  if (run.ownerUserId) {
+    const profile = await tx.userProfile.findUnique({ where: { id: run.ownerUserId } })
+    if (!profile || profile.deletionRequestedAt) throw new LostLeaseError()
+  }
 }
 export function receiptData(receipt: AiReceipt) {
   return {
@@ -102,6 +106,7 @@ export function createAiAccounting(
           WHERE "createdAt" >= date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR "finalCostMicroUsd" IS NULL),0)::bigint AS "globalCost"
         FROM "AiUsageReservation" WHERE status <> 'released'
       `
+        const [deletedSpend] = await tx.$queryRaw<{ cost: bigint }[]>`SELECT COALESCE(sum(COALESCE("finalCostMicroUsd", "reservedCostMicroUsd")),0)::bigint AS cost FROM "DeletedAccountAiBudget" WHERE "incurredAt" >= date_trunc('day',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC' OR "finalCostMicroUsd" IS NULL`
         const cost =
           config.reservedCostMicroUsd * BigInt(config.maxPaidAttempts)
         if (
@@ -110,7 +115,7 @@ export function createAiAccounting(
           totals.ownerCost + cost > entitlement.limits.costMicroUsd
         )
           throw new AllowanceError("allowance_exhausted")
-        if (totals.globalCost + cost > policy.globalDailyCostMicroUsd)
+        if (totals.globalCost + deletedSpend.cost + cost > policy.globalDailyCostMicroUsd)
           throw new AllowanceError("ai_spend_limit")
         return tx.aiUsageReservation.create({
           data: {

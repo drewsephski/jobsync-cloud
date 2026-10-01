@@ -184,7 +184,10 @@ export function createDiscoveryWorker(
   async function plan(ownerUserId: string) {
     return db.$transaction(
       async (tx) => {
-        await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${ownerUserId} FOR NO KEY UPDATE`
+        const active = await tx.$queryRaw<
+          { id: string }[]
+        >`SELECT id FROM "UserProfile" WHERE id = ${ownerUserId} AND "deletionRequestedAt" IS NULL FOR NO KEY UPDATE`
+        if (!active.length) return { considered: 0, eligible: 0, queued: 0 }
         const entitlement = await readEntitlement(tx, ownerUserId)
         if (!entitlement.verified || !entitlement.limits)
           return { considered: 0, eligible: 0, queued: 0 }
@@ -492,21 +495,14 @@ export function createDiscoveryWorker(
     // history provides fairness across invocations without a volatile cursor.
     const owners = await db.$queryRaw<
       { id: string }[]
-    >`SELECT u.id FROM "UserProfile" u WHERE u."onboardingCompletedAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "CompanyWatch" w WHERE w."ownerUserId" = u.id)
+    >`SELECT u.id FROM "UserProfile" u WHERE u."deletionRequestedAt" IS NULL AND u."onboardingCompletedAt" IS NOT NULL AND EXISTS (SELECT 1 FROM "CompanyWatch" w WHERE w."ownerUserId" = u.id)
       ORDER BY (SELECT max(r."createdAt") FROM "ProcessingRun" r WHERE r."ownerUserId" = u.id AND kind = 'discovery_plan_v1') ASC NULLS FIRST, u.id LIMIT 10`
     const funnels = []
     for (const owner of owners) {
       funnels.push(await plan(owner.id))
-      await db.processingRun.create({
-        data: {
-          ownerUserId: owner.id,
-          kind: "discovery_plan_v1",
-          resourceId: owner.id,
-          idempotencyKey: `plan:${owner.id}:${randomUUID()}`,
-          status: "succeeded",
-          completedAt: new Date(),
-        },
-      })
+      await db.$executeRaw`INSERT INTO "ProcessingRun" (id,"ownerUserId",kind,"resourceId","idempotencyKey",status,"completedAt","updatedAt")
+        SELECT ${randomUUID()}::uuid,${owner.id},'discovery_plan_v1',${owner.id},${`plan:${owner.id}:${randomUUID()}`},'succeeded',now(),now()
+        WHERE EXISTS (SELECT 1 FROM "UserProfile" WHERE id=${owner.id} AND "deletionRequestedAt" IS NULL)`
     }
     let matched = 0
     for (let n = 0; n < 2; n++) {

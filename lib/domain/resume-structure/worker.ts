@@ -48,7 +48,8 @@ export function createResumeStructureWorker(
     const rows = await db.$queryRaw<
       ProcessingRun[]
     >`INSERT INTO "ProcessingRun" (id,"ownerUserId",kind,"resourceId","idempotencyKey","updatedAt")
-      VALUES (${randomUUID()}::uuid,${upload.ownerUserId},${RESUME_STRUCTURE_KIND},${upload.id},${structureKey(upload)},now())
+      SELECT ${randomUUID()}::uuid,${upload.ownerUserId},${RESUME_STRUCTURE_KIND},${upload.id},${structureKey(upload)},now()
+      WHERE EXISTS (SELECT 1 FROM "UserProfile" WHERE id=${upload.ownerUserId} AND "deletionRequestedAt" IS NULL)
       ON CONFLICT ("idempotencyKey") DO UPDATE SET "idempotencyKey" = EXCLUDED."idempotencyKey"
       WHERE "ProcessingRun"."ownerUserId" = EXCLUDED."ownerUserId" AND "ProcessingRun"."kind" = EXCLUDED."kind" AND "ProcessingRun"."resourceId" = EXCLUDED."resourceId" RETURNING *`
     if (!rows[0]) throw new Error("idempotency_conflict")

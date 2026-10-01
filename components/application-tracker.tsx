@@ -253,9 +253,9 @@ export function ApplicationTracker({
                   {a.stageName ? ` · ${a.stageName}` : ""}
                 </CardDescription>
               </CardHeader>
-              <CardFooter className="flex-wrap justify-between gap-3 border-t border-slate-100 pt-3">
+              <CardFooter className="flex-wrap justify-between gap-3 border-t border-border pt-3">
                 <CardDescription
-                  className={`flex min-w-0 items-center gap-2 text-xs ${a.followUpOn && a.followUpOn <= data.today && !a.archivedAt ? "text-amber-800" : ""}`}
+                  className={`flex min-w-0 items-center gap-2 text-xs ${a.followUpOn && a.followUpOn <= data.today && !a.archivedAt ? "text-foreground" : ""}`}
                 >
                   <Clock className="size-3.5 shrink-0" />
                   {a.followUpOn && !a.archivedAt
@@ -276,7 +276,7 @@ export function ApplicationTracker({
             </Card>
           ))
         ) : (
-          <Empty className="min-h-72 border-slate-200 bg-white">
+          <Empty className="min-h-72 border-border bg-secondary-background">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 {query ? <Search /> : <Briefcase />}

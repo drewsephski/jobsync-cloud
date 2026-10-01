@@ -31,7 +31,8 @@ export function createProcessingRuns(db: PrismaClient, random = Math.random) {
   async function ensure(upload: ResumeUpload) {
     const rows = await db.$queryRaw<ProcessingRun[]>`
       INSERT INTO "ProcessingRun" ("id", "ownerUserId", "kind", "resourceId", "idempotencyKey", "updatedAt")
-      VALUES (${randomUUID()}::uuid, ${upload.ownerUserId}, ${RESUME_VALIDATION_KIND}, ${upload.id}, ${validationIdempotencyKey(upload)}, now())
+      SELECT ${randomUUID()}::uuid, ${upload.ownerUserId}, ${RESUME_VALIDATION_KIND}, ${upload.id}, ${validationIdempotencyKey(upload)}, now()
+      WHERE EXISTS (SELECT 1 FROM "UserProfile" WHERE id=${upload.ownerUserId} AND "deletionRequestedAt" IS NULL)
       ON CONFLICT ("idempotencyKey") DO UPDATE SET "idempotencyKey" = EXCLUDED."idempotencyKey"
       WHERE "ProcessingRun"."ownerUserId" = EXCLUDED."ownerUserId"
         AND "ProcessingRun"."kind" = EXCLUDED."kind"
@@ -68,6 +69,8 @@ export function createProcessingRuns(db: PrismaClient, random = Math.random) {
           SELECT r."id" FROM "ProcessingRun" r
           WHERE r."kind" = ${kind} AND (${runId}::uuid IS NULL OR r."id" = ${runId}::uuid)
             AND r."attempt" < ${MAX_ATTEMPTS}
+            AND r."cancellationRequestedAt" IS NULL
+            AND (r."ownerUserId" IS NULL OR EXISTS (SELECT 1 FROM "UserProfile" p WHERE p.id=r."ownerUserId" AND p."deletionRequestedAt" IS NULL))
             AND ((r."status" IN ('pending', 'retry_wait') AND r."availableAt" <= now())
               OR (r."status" = 'running' AND r."leaseExpiresAt" <= now()))
             AND (SELECT count(*) FROM "ProcessingRun" WHERE "status" = 'running' AND "leaseExpiresAt" > clock_timestamp()) < ${GLOBAL_CONCURRENCY}
@@ -88,7 +91,7 @@ export function createProcessingRuns(db: PrismaClient, random = Math.random) {
     const rows = await db.$queryRaw<ProcessingRun[]>`
       UPDATE "ProcessingRun" SET "leaseExpiresAt" = clock_timestamp() + ${LEASE_SECONDS} * interval '1 second', "updatedAt" = now()
       WHERE "id" = ${run.id}::uuid AND "leaseToken" = ${run.leaseToken}::uuid
-        AND "status" = 'running' AND "leaseExpiresAt" > clock_timestamp() RETURNING *
+        AND "status" = 'running' AND "leaseExpiresAt" > clock_timestamp() AND "cancellationRequestedAt" IS NULL RETURNING *
     `
     if (!rows[0]) throw new LostLeaseError()
     return rows[0]

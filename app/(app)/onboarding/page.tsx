@@ -1,3 +1,4 @@
+import { privateRead } from "@/lib/backend/private-read"
 import { redirect } from "next/navigation"
 import { requireCurrentProfile } from "@/lib/auth/context"
 import { db } from "@/lib/db"
@@ -7,7 +8,7 @@ import { OnboardingFlow } from "@/components/onboarding-flow"
 export default async function OnboardingPage() {
   const { user, profile } = await requireCurrentProfile()
   if (profile.onboardingCompletedAt) redirect("/dashboard")
-  const state = await createOnboardingService(db).read(user)
+  const state = await privateRead(() => createOnboardingService(db).read(user))
   if (state.completedAt) redirect("/dashboard")
   return (
     <OnboardingFlow

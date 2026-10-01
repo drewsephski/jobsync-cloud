@@ -1,3 +1,4 @@
+import type { Metadata } from "next"
 import { Geist, Geist_Mono } from "next/font/google"
 
 import "./globals.css"
@@ -12,6 +13,11 @@ const fontMono = Geist_Mono({
   subsets: ["latin"],
   variable: "--font-mono",
 })
+
+export const metadata: Metadata = {
+  title: { default: "JobSync Cloud", template: "%s | JobSync Cloud" },
+  description: "Your job search workspace, already set up.",
+}
 
 export default function RootLayout({
   children,

@@ -1,3 +1,4 @@
+import { requireActiveAccount } from "../account/guard"
 import { readEntitlement, requireEntitlement } from "../../billing/entitlements"
 import { z } from "zod"
 import type { PrismaClient } from "../../generated/prisma/client"
@@ -209,95 +210,107 @@ export function createDiscoveryService(db: PrismaClient) {
             })),
         }
       },
-      { isolationLevel: "RepeatableRead" }
+      { isolationLevel: "RepeatableRead", timeout: 30_000 }
     )
   }
   async function mutate(user: CurrentAuthUser, value: unknown) {
     const parsed = mutationSchema.safeParse(value)
     if (!parsed.success) throw new UploadError("invalid_input", 400)
     const action = parsed.data
-    await db.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${user.id} FOR NO KEY UPDATE`
-      const entitlement = await requireEntitlement(tx, user.id)
-      const profile = await tx.userProfile.findUniqueOrThrow({
-        where: { id: user.id },
-      })
-      if (!profile.onboardingCompletedAt)
-        throw new UploadError("onboarding_required", 409)
-      if (action.action === "watch") {
-        const board = await tx.atsBoard.findFirst({
-          where: { id: action.boardId, enabled: true },
+    await db.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "UserProfile" WHERE id = ${user.id} FOR NO KEY UPDATE`
+        await requireActiveAccount(tx, user.id)
+        const entitlement = await requireEntitlement(tx, user.id)
+        const profile = await tx.userProfile.findUniqueOrThrow({
+          where: { id: user.id },
         })
-        if (!board) throw new UploadError("company_not_found", 404)
-        if (action.watching) {
-          const existing = await tx.companyWatch.findUnique({
-            where: {
-              ownerUserId_boardId: { ownerUserId: user.id, boardId: board.id },
-            },
+        if (!profile.onboardingCompletedAt)
+          throw new UploadError("onboarding_required", 409)
+        if (action.action === "watch") {
+          const board = await tx.atsBoard.findFirst({
+            where: { id: action.boardId, enabled: true },
           })
+          if (!board) throw new UploadError("company_not_found", 404)
+          if (action.watching) {
+            const existing = await tx.companyWatch.findUnique({
+              where: {
+                ownerUserId_boardId: {
+                  ownerUserId: user.id,
+                  boardId: board.id,
+                },
+              },
+            })
+            if (
+              !existing &&
+              (await tx.companyWatch.count({
+                where: { ownerUserId: user.id },
+              })) >= entitlement.limits!.watches
+            )
+              throw new UploadError("watch_limit", 409)
+            await tx.companyWatch.upsert({
+              where: {
+                ownerUserId_boardId: {
+                  ownerUserId: user.id,
+                  boardId: board.id,
+                },
+              },
+              create: { ownerUserId: user.id, boardId: board.id },
+              update: {},
+            })
+          } else
+            await tx.companyWatch.deleteMany({
+              where: { ownerUserId: user.id, boardId: board.id },
+            })
+        } else if (action.action === "state") {
           if (
-            !existing &&
-            (await tx.companyWatch.count({
-              where: { ownerUserId: user.id },
-            })) >= entitlement.limits!.watches
+            !(await tx.jobMatch.findFirst({
+              where: { ownerUserId: user.id, jobPostingId: action.postingId },
+            }))
           )
-            throw new UploadError("watch_limit", 409)
-          await tx.companyWatch.upsert({
+            throw new UploadError("job_not_found", 404)
+          await tx.userJobState.upsert({
             where: {
-              ownerUserId_boardId: { ownerUserId: user.id, boardId: board.id },
+              ownerUserId_jobPostingId: {
+                ownerUserId: user.id,
+                jobPostingId: action.postingId,
+              },
             },
-            create: { ownerUserId: user.id, boardId: board.id },
-            update: {},
-          })
-        } else
-          await tx.companyWatch.deleteMany({
-            where: { ownerUserId: user.id, boardId: board.id },
-          })
-      } else if (action.action === "state") {
-        if (
-          !(await tx.jobMatch.findFirst({
-            where: { ownerUserId: user.id, jobPostingId: action.postingId },
-          }))
-        )
-          throw new UploadError("job_not_found", 404)
-        await tx.userJobState.upsert({
-          where: {
-            ownerUserId_jobPostingId: {
+            create: {
               ownerUserId: user.id,
               jobPostingId: action.postingId,
+              state: action.state,
             },
-          },
-          create: {
-            ownerUserId: user.id,
-            jobPostingId: action.postingId,
-            state: action.state,
-          },
-          update: { state: action.state },
-        })
-      } else {
-        if (profile.preferenceRevision !== action.expectedRevision)
-          throw new UploadError("preferences_conflict", 409)
-        if (!(await profileInputs(tx, user.id)))
-          throw new UploadError("resume_not_confirmed", 409)
-        await tx.targetPreference.deleteMany({
-          where: { ownerUserId: user.id, active: true },
-        })
-        await tx.targetPreference.createMany({
-          data: action.targets.map((t) => ({
-            ...t,
-            ownerUserId: user.id,
-            minimumCompensationUsd:
-              t.minimumCompensationUsd === null
-                ? null
-                : BigInt(t.minimumCompensationUsd),
-          })),
-        })
-        await tx.userProfile.update({
-          where: { id: user.id },
-          data: { preferenceRevision: { increment: 1 } },
-        })
-      }
-    })
+            update: { state: action.state },
+          })
+        } else {
+          if (profile.preferenceRevision !== action.expectedRevision)
+            throw new UploadError("preferences_conflict", 409)
+          if (!(await profileInputs(tx, user.id)))
+            throw new UploadError("resume_not_confirmed", 409)
+          await tx.targetPreference.deleteMany({
+            where: { ownerUserId: user.id, active: true },
+          })
+          await tx.targetPreference.createMany({
+            data: action.targets.map((t) => ({
+              ...t,
+              ownerUserId: user.id,
+              minimumCompensationUsd:
+                t.minimumCompensationUsd === null
+                  ? null
+                  : BigInt(t.minimumCompensationUsd),
+            })),
+          })
+          await tx.userProfile.update({
+            where: { id: user.id },
+            data: { preferenceRevision: { increment: 1 } },
+          })
+        }
+        // Mutations serialize on the profile row. Allow bounded lock contention
+        // without dropping valid concurrent watch changes at Prisma's 5s default.
+      },
+      { timeout: 30_000 }
+    )
     return { ok: true }
   }
   return { read, mutate }

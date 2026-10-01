@@ -358,12 +358,12 @@ export function ResumeEditor({
                 ].map((entry, index) => (
                   <CardDescription
                     key={index}
-                    className="border-l-2 border-slate-200 pl-4 whitespace-pre-wrap"
+                    className="border-l-2 border-border pl-4 whitespace-pre-wrap"
                   >
                     {entry.evidence}
                   </CardDescription>
                 ))}
-                <CardDescription className="font-mono text-xs break-all text-slate-500">
+                <CardDescription className="font-mono text-xs break-all text-foreground">
                   Source SHA-256: {state.original!.sha256}
                   <br />
                   {state.original!.extractionVersion} ·{" "}
@@ -388,7 +388,7 @@ export function ResumeEditor({
             </FieldGroup>
           </TabsContent>
         </Tabs>
-        <FieldGroup className="review-actions gap-4 border-t border-slate-200 pt-5">
+        <FieldGroup className="review-actions gap-4 border-t border-border pt-5">
           {error && (
             <Alert variant="destructive" role="alert">
               <AlertTitle>
@@ -456,7 +456,7 @@ export function ResumeEditor({
               <Check />
             </Button>
           </FieldGroup>
-          <CardDescription className="text-xs text-slate-500">
+          <CardDescription className="text-xs text-foreground">
             Saving keeps an editable draft. Confirm resume accepts only the
             exact saved version you reviewed.
           </CardDescription>

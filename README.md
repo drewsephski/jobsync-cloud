@@ -1,9 +1,13 @@
 # JobSync Cloud
 
 Next.js 16 application with Neon Postgres, Neon Managed Better Auth, and private Neon Object Storage.
-The protected `/dashboard` establishes the server-side identity and application
-profile boundary. `/dashboard/resume` provides direct presigned browser uploads
-and ownership-checked private downloads. Neon Functions validate and extract PDF/DOCX text, then structure a factual draft through OpenRouter with durable usage accounting. The final shell and subscriptions remain deferred.
+The protected application workspace provides server-side identity, onboarding,
+resume review, public job discovery, private application tracking, and usage-aware
+billing controls. Private resume files use presigned browser uploads and
+ownership-checked downloads. Neon Functions validate and extract PDF/DOCX text,
+then structure factual drafts through the Vercel AI SDK and official OpenRouter
+provider with durable usage accounting. See [Privacy](/privacy) and [Terms](/terms)
+for the current user-facing data and service notices.
 
 Use Node.js 22.12+ or 24 LTS and pnpm (the repository pins pnpm in `package.json`).
 
@@ -112,10 +116,11 @@ Postgres profile provisioning and independent concurrent requests. Rollback test
 leave no writes; concurrency tests delete their unique test profile in `finally`.
 Use an isolated development database for these checks.
 
-This is an early auth foundation, **not production-complete authentication**.
-Before launch, configure trusted domains and application name, production OAuth
-credentials, a custom email provider, verification and recovery flows, and disable
-localhost in production. Google OAuth and email infrastructure are deferred.
+Email/password identity uses Neon Managed Auth. Production verification and
+recovery delivery still require a configured email provider; Google sign-in also
+requires production OAuth credentials. See the
+[production activation checklist](docs/PRODUCTION_ACTIVATION.md) before enabling
+those provider flows.
 
 ## UI primitives
 

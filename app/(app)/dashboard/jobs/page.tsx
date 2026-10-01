@@ -1,3 +1,4 @@
+import { privateRead } from "@/lib/backend/private-read"
 import { redirect } from "next/navigation"
 import { requireCurrentProfile } from "@/lib/auth/context"
 import { db } from "@/lib/db"
@@ -13,7 +14,7 @@ export default async function JobsPage({
   const params = await searchParams
   return (
     <ApplicationTracker
-      initial={await createApplicationService(db).read(user)}
+      initial={await privateRead(() => createApplicationService(db).read(user))}
       initialId={params.application}
     />
   )

@@ -31,6 +31,7 @@ export function discoveryEligibleOwner(
   now = new Date()
 ): Prisma.UserProfileWhereInput {
   return {
+    deletionRequestedAt: null,
     emailVerifiedAt: { not: null },
     OR: [
       { trialStartedAt: { not: null }, trialEndsAt: { gt: now } },
@@ -104,6 +105,7 @@ export async function readEntitlement(
     where: { ownerUserId_livemode: { ownerUserId, livemode: billingMode() } },
     include: { subscriptions: true },
   })
+  if (profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
   return resolveEntitlement(profile, customer?.subscriptions ?? [], now)
 }
 export async function requireEntitlement(
@@ -126,6 +128,8 @@ export async function requireCoreEntitlement(
   tx: Prisma.TransactionClient,
   ownerUserId: string
 ) {
+  const profile = await tx.userProfile.findUnique({ where: { id: ownerUserId } })
+  if (!profile || profile.deletionRequestedAt) throw new UploadError("account_deleting", 403)
   if (billingRolloutReady() && billingMode())
     await requireEntitlement(tx, ownerUserId)
 }

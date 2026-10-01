@@ -1,7 +1,7 @@
 "use client"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import Link from "next/link"
+import { LinkButton } from "@/components/ui/link-button"
 import { authClient } from "@/lib/auth/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -81,10 +81,8 @@ export function AuthEmailFlow({
         setPassword("")
         setOtp("")
       }
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Could not complete your request."
-      )
+    } catch {
+      setError("Invalid or expired code. Request a new code and try again.")
     } finally {
       setPending(false)
     }
@@ -92,7 +90,7 @@ export function AuthEmailFlow({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>
+        <CardTitle role="heading" aria-level={1}>
           {verifying ? "Verify your email" : "Reset your password"}
         </CardTitle>
         <CardDescription>
@@ -161,15 +159,12 @@ export function AuthEmailFlow({
             <CardDescription role="status">{message}</CardDescription>
           )}
           {error && <FieldError role="alert">{error}</FieldError>}
-          <Button
+          <LinkButton
             variant="neutral"
-            nativeButton={false}
-            render={
-              <Link href={verifying ? "/dashboard/billing" : "/auth/sign-in"} />
-            }
+            href={verifying ? "/dashboard/settings?tab=plan" : "/auth/sign-in"}
           >
-            {verifying ? "Account & billing" : "Back to sign in"}
-          </Button>
+            {verifying ? "Account & trial" : "Back to sign in"}
+          </LinkButton>
         </FieldGroup>
       </CardContent>
     </Card>
