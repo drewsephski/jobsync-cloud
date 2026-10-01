@@ -41,7 +41,7 @@ import {
   EmptyDescription,
   EmptyMedia,
 } from "@/components/ui/empty"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import {
   Dialog,
   DialogContent,
@@ -354,13 +354,13 @@ export function DiscoverFeed({ initial }: { initial: DiscoveryData }) {
                     className="review-guidance min-h-32"
                     aria-live="polite"
                   >
-                    <CardTitle className="text-sm">
+                    <AlertTitle className="text-sm">
                       {job.aiScore !== null
                         ? `AI match · ${job.aiScore}/100 · ${job.recommendation}`
                         : job.stale
                           ? "Search updated"
                           : "Why this is worth a look"}
-                    </CardTitle>
+                    </AlertTitle>
                     <AlertDescription className="mt-2 line-clamp-3">
                       {job.aiScore !== null
                         ? job.rationale

@@ -91,13 +91,29 @@ test.afterAll(async () => {
         data: { cancellationRequestedAt: now },
       })
       await waitFor(
-        async () =>
-          (await db.processingRun.count({
+        async () => {
+          // Cancellation fences commits immediately. A canceled invocation may
+          // retain its lease until expiry; only reap our expired fixture leases.
+          await db.processingRun.updateMany({
+            where: {
+              ownerUserId: { in: owners },
+              status: "running",
+              leaseExpiresAt: { lte: new Date() },
+            },
+            data: {
+              status: "canceled",
+              leaseToken: null,
+              leaseExpiresAt: null,
+              completedAt: new Date(),
+            },
+          })
+          return (await db.processingRun.count({
             where: { ownerUserId: { in: owners }, status: "running" },
           })) === 0
             ? true
-            : null,
-        45_000,
+            : null
+        },
+        150_000,
         "private discovery workers did not quiesce for fixture cleanup"
       )
       try {
@@ -261,7 +277,7 @@ async function uploadAndConfirm(
     .click()
   await expect(page).toHaveURL(/\/dashboard\/discover$/)
   await expect(
-    page.getByRole("link", { name: "Original posting", exact: true }).first()
+    page.getByRole("button", { name: "Original posting", exact: true }).first()
   ).toBeVisible({ timeout: 20_000 })
   return { clickedAt, clickToCardsMs: Date.now() - clickedAt }
 }
@@ -281,16 +297,14 @@ async function waitFor<T>(
 }
 
 async function jobCard(page: Page, job: { originalUrl: string }) {
-  const links = page.getByRole("link", {
-    name: "Original posting",
-    exact: true,
-  })
-  for (let index = 0; index < (await links.count()); index++) {
-    const link = links.nth(index)
-    if ((await link.getAttribute("href")) === job.originalUrl)
-      return link.locator("xpath=ancestor::*[@data-slot='card'][1]")
-  }
-  throw new Error("surfaced job card was not present for the selected filter")
+  const link = page
+    .getByRole("button", {
+      name: "Original posting",
+      exact: true,
+    })
+    .and(page.locator(`[href=${JSON.stringify(job.originalUrl)}]`))
+  await expect(link).toBeVisible()
+  return link.locator("xpath=ancestor::*[@data-slot='card'][1]")
 }
 
 async function recordAiEvidence(ownerIds: string[]) {
@@ -320,11 +334,13 @@ async function recordAiEvidence(ownerIds: string[]) {
       latencyMs?: number | null
       zdr?: boolean
       dataCollection?: string
+      actualProvider?: string | null
     }
     return {
       account: ownerIds.indexOf(row.ownerUserId) + 1,
       feature: row.feature,
       provider: row.provider,
+      actualProvider: metadata.actualProvider ?? null,
       model: row.model,
       status: row.status,
       inputTokens: row.inputTokens,
@@ -433,6 +449,31 @@ test("@discovery-live new users find jobs before following companies and recover
   ).json()
   expect(firstRead.jobs.length).toBeGreaterThan(0)
   expect(firstRead.watches).toHaveLength(0)
+  const firstAiVisible = page
+    .getByText(/^AI match ·/)
+    .first()
+    .waitFor({ state: "visible", timeout: 30_000 })
+    .then(() => Date.now() - firstUse.clickedAt)
+    .catch(() => null)
+  const titleBox = await page
+    .locator('[data-slot="alert-title"]')
+    .first()
+    .boundingBox()
+  expect(titleBox?.width).toBeGreaterThan(120)
+  expect(titleBox?.height).toBeLessThan(70)
+  await page.screenshot({
+    path: "output/playwright/discovery-first-use-desktop.png",
+  })
+  await page.setViewportSize({ width: 390, height: 844 })
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth
+    )
+  ).toBe(true)
+  await page.screenshot({
+    path: "output/playwright/discovery-first-use-mobile.png",
+  })
+  await page.setViewportSize({ width: 1280, height: 800 })
   const firstJob = firstRead.jobs[0]
   const firstCard = await jobCard(page, firstJob)
   await firstCard.getByRole("button", { name: "Save", exact: true }).click()
@@ -472,12 +513,19 @@ test("@discovery-live new users find jobs before following companies and recover
   await page.getByRole("tab", { name: /Saved/ }).click()
   const watchCard = await jobCard(page, firstJob)
   const watchStartedAt = Date.now()
+  const watchResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/discovery") &&
+      response.request().method() === "POST"
+  )
   await watchCard
     .getByRole("button", { name: `Watch ${firstJob.company}`, exact: true })
     .click()
+  expect((await watchResponse).ok()).toBe(true)
   await page.close()
   await context.close()
   const pageClosedAt = new Date()
+  evidence.clickToFirstAiVisibleMs = await firstAiVisible
   await expect
     .poll(
       () =>
@@ -540,9 +588,9 @@ test("@discovery-live new users find jobs before following companies and recover
       })
     : null
   expect(dismissedState?.state).toBe("dismissed")
-  const aiMatch = await waitFor(
-    async () =>
-      db.jobMatch.findFirst({
+  const awayWork = await waitFor(
+    async () => {
+      const enhanced = await db.jobMatch.findFirst({
         where: {
           ownerUserId: owner,
           aiAnalyzedAt: { gte: pageClosedAt },
@@ -550,9 +598,22 @@ test("@discovery-live new users find jobs before following companies and recover
         },
         orderBy: { aiAnalyzedAt: "asc" },
         select: { aiAnalyzedAt: true, jobPostingId: true },
-      }),
+      })
+      if (enhanced) return { enhanced, rematched: null }
+      const rematched = await db.processingRun.findFirst({
+        where: {
+          ownerUserId: owner,
+          kind: "discovery_plan_v1",
+          status: "succeeded",
+          createdAt: { gte: pageClosedAt },
+          checkpoint: { path: ["boardId"], equals: boardBefore.id },
+        },
+        select: { createdAt: true },
+      })
+      return rematched ? { enhanced: null, rematched } : null
+    },
     90_000,
-    "no AI-enhanced match completed while the page was away"
+    "no durable enhancement or company rematch completed while the page was away"
   )
   const matchReceipt = await db.aiUsage.findFirstOrThrow({
     where: {
@@ -581,7 +642,10 @@ test("@discovery-live new users find jobs before following companies and recover
     clickToFirstAiEnhanced: clickToAiMs,
   }
   evidence.firstAiAnalyzedAt = firstAiMatch.aiAnalyzedAt
-  evidence.enhancedAfterBrowserClosedAt = aiMatch.aiAnalyzedAt
+  evidence.enhancedAfterBrowserClosedAt =
+    awayWork.enhanced?.aiAnalyzedAt ?? null
+  evidence.companyRematchedAfterBrowserClosedAt =
+    awayWork.rematched?.createdAt ?? null
   evidence.ai = await recordAiEvidence([owner])
   evidence.durableAfterPageClosed = true
   await persistEvidence()
@@ -633,13 +697,30 @@ test("@discovery-live new users find jobs before following companies and recover
   const secondUse = await uploadAndConfirm(secondPage, "Product Designer")
   await expect(
     secondPage
-      .getByRole("link", { name: "Original posting", exact: true })
+      .getByRole("button", { name: "Original posting", exact: true })
       .first()
   ).toBeVisible({ timeout: 20_000 })
   const secondRead = await (
     await secondPage.request.get("/api/discovery?state=new")
   ).json()
   expect(secondRead.jobs.length).toBeGreaterThan(0)
+  await secondContext.close()
+  const secondClosedAt = new Date()
+  const secondAwayEnhanced = await waitFor(
+    () =>
+      db.jobMatch.findFirst({
+        where: {
+          ownerUserId: secondOwner,
+          aiAnalyzedAt: { gte: secondClosedAt },
+          aiScore: { not: null },
+        },
+        select: { aiAnalyzedAt: true },
+      }),
+    90_000,
+    "second account received no durable AI enhancement after leaving the browser"
+  )
+  evidence.secondAccountEnhancedAfterBrowserClosedAt =
+    secondAwayEnhanced.aiAnalyzedAt
   const matchCounts = await db.jobMatch.groupBy({
     by: ["ownerUserId"],
     where: { ownerUserId: { in: [owner, secondOwner] } },
@@ -815,5 +896,5 @@ test("@discovery-live new users find jobs before following companies and recover
   evidence.staleInputRevisionAdvanced = true
   evidence.confirmedResumeChangeMarkedPriorMatchStale = true
   evidence.durableAfterPageClosed = true
-  await secondContext.close()
+  await secondContext.close().catch(() => {})
 })
