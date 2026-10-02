@@ -4,6 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "mcp:test": "node --import tsx scripts/test-mcp.ts",
     "dev": "next dev",
     "build": "prisma generate && next build",
     "start": "next start",
@@ -45,6 +46,7 @@
     "@aws-sdk/s3-request-presigner": "3.1144.0",
     "@base-ui/react": "^1.8.0",
     "@hookform/resolvers": "^5.9.1",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@neondatabase/auth": "0.5.0-beta",
     "@next/env": "16.3.6",
     "@openrouter/ai-sdk-provider": "3.1.0",

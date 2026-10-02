@@ -28,6 +28,8 @@ import { settingsRequest } from "./settings-request"
 import { SettingsProfile } from "./settings-profile"
 import { SettingsTargets } from "./settings-targets"
 import { SettingsPlan } from "./settings-plan"
+import { SettingsMcp } from "./settings-mcp"
+import type { McpTokenView } from "@/lib/mcp/schema"
 import type { billingSummary } from "@/lib/billing/service"
 import type { DiscoveryData } from "@/lib/domain/discovery/service"
 
@@ -43,6 +45,8 @@ export function SettingsAccount({
   files,
   initialTab,
   checkout,
+  mcpTokens,
+  appOrigin,
 }: {
   name: string
   timezone: string
@@ -54,6 +58,8 @@ export function SettingsAccount({
   files: { id: string; fileName: string }[]
   initialTab: string
   checkout?: string
+  mcpTokens: McpTokenView[]
+  appOrigin: string
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState(false)
@@ -110,7 +116,7 @@ export function SettingsAccount({
       )}
       <Tabs
         defaultValue={
-          ["account", "targets", "plan", "data"].includes(initialTab)
+          ["account", "targets", "plan", "data", "mcp"].includes(initialTab)
             ? initialTab
             : "account"
         }
@@ -133,6 +139,7 @@ export function SettingsAccount({
             <span className="sm:hidden">Data</span>
             <span className="hidden sm:inline">Your data</span>
           </TabsTrigger>
+          <TabsTrigger value="mcp">MCP</TabsTrigger>
         </TabsList>
         <TabsContent value="account" keepMounted>
           <SettingsProfile
@@ -231,6 +238,9 @@ export function SettingsAccount({
               </LinkButton>
             </FieldGroup>
           </FieldGroup>
+        </TabsContent>
+        <TabsContent value="mcp">
+          <SettingsMcp initialTokens={mcpTokens} origin={appOrigin} />
         </TabsContent>
       </Tabs>
       <AlertDialog open={deleting} onOpenChange={setDeleting}>

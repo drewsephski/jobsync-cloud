@@ -200,6 +200,11 @@ export function createOnboardingService(db: PrismaClient) {
           )
         )
           throw new UploadError("resume_incomplete", 400)
+        // Confirmed manual drafts must be usable by discovery and attachments.
+        await tx.resumeVersion.updateMany({
+          where: { id: version.id, ownerUserId: user.id, status: "draft" },
+          data: { status: "ready" },
+        })
         if (!version.confirmed)
           await tx.resume.updateMany({
             where: { id: version.resumeId, ownerUserId: user.id },

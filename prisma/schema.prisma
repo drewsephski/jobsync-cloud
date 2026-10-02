@@ -85,6 +85,25 @@ model UserProfile {
   billingCustomers BillingCustomer[]
   discoveryAllowances DiscoveryAllowance[]
   feedback ProductFeedback[]
+  mcpTokens McpAccessToken[]
+}
+
+// Only a one-way digest is stored. Tokens are private account capabilities.
+model McpAccessToken {
+  id String @id @default(uuid()) @db.Uuid
+  ownerUserId String
+  name String @db.VarChar(100)
+  tokenHash String @unique @db.VarChar(64)
+  tokenPrefix String @db.VarChar(12)
+  scopes String[]
+  expiresAt DateTime @db.Timestamptz(3)
+  revokedAt DateTime? @db.Timestamptz(3)
+  lastUsedAt DateTime? @db.Timestamptz(3)
+  rateWindowAt DateTime @default(now()) @db.Timestamptz(3)
+  rateCount Int @default(0)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  owner UserProfile @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  @@index([ownerUserId, createdAt])
 }
 
 model ProductFeedback {

@@ -66,3 +66,6 @@ next-env.d.ts
 
 # Local visual review captures
 /.impeccable/review/
+
+# Local generated artifacts, including personal resumes
+/output/

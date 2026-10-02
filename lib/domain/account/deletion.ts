@@ -30,6 +30,10 @@ export function createAccountDeletion(
           where: { id: owner },
           data: { deletionRequestedAt: new Date() },
         })
+        await tx.mcpAccessToken.updateMany({
+          where: { ownerUserId: owner, revokedAt: null },
+          data: { revokedAt: new Date() },
+        })
         const queued = await tx.accountDeletionRequest.upsert({
           where: { ownerUserId: owner },
           create: { ownerUserId: owner },

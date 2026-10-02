@@ -35,7 +35,8 @@ export function createSessionContext(
     const session = z.object({ user: userSchema }).safeParse(result.data)
     if (!session.success) throw new Error("Invalid authenticated session")
     const { id, name, email, emailVerified } = session.data.user
-    // Only this verified-session boundary produces the branded identity.
+    // Session identity is produced here; the MCP opaque-token boundary also
+    // produces this identity after verifying persisted account ownership.
     return {
       id,
       name: name ?? null,

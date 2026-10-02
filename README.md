@@ -469,3 +469,7 @@ See [application tracking handoff](docs/APPLICATIONS_HANDOFF.md) for the snapsho
 model, owner isolation, confirmed resume associations, retry/revision rules,
 tests, deployment and production proof. Tracking is deterministic and adds no AI
 calls or automatic applications.
+
+## MCP access
+
+Connect an AI assistant to your private applications and resume versions from **Settings → MCP**. See [MCP setup and permissions](docs/mcp.md) for Codex, HTTP clients, and Claude Desktop configuration.
